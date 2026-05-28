@@ -1,0 +1,491 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/dataset_compare_fast/kitti360
+seeds: [0]
+
+# Matched fast matrix for cross-dataset comparison.
+# Pair with dataset_compare_cityscapes_fast.yaml. Keep names parallel so the
+# summarizer can compare the same model/frontend/constraint across datasets.
+experiments:
+  - name: kitti360_clean_codesign_segformer_b0
+    overrides:
+      data: &kitti_data
+        name: kitti360_seg
+        root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+        label_encoding: original_id
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 8000
+        max_val_samples: 1500
+        train_stride: 2
+        val_stride: 4
+        rare_oversample_factor: 2.0
+        photometric_jitter: 0.12
+        viewpoint_jitter:
+          enabled: true
+          prob: 0.35
+          max_pitch_frac: 0.10
+          max_height_frac: 0.06
+          max_shift_frac: 0.05
+          max_yaw_frac: 0.04
+      pipeline: &sensor_pipeline
+        input: sensor
+      sensor: &clean_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        task_token_channels: 8
+        task_token_hidden_channels: 24
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: true
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        exposure_init: -1.38629436
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization:
+          cfa_collapse: 0.03
+          exposure_prior: 0.05
+          read_noise_prior: 0.03
+          shot_noise_prior: 0.03
+          bit_depth_prior: 0.04
+          task_token_collapse: 0.02
+          task_token_residual_energy: 0.01
+          task_token_weight_l2: 0.0001
+      lens: &mild_learned_lens
+        learn_optics: true
+        trainable_psf:
+          num_zones: 5
+          kernel_size: 13
+          base_sigma_px: 0.55
+          min_sigma_px: 0.20
+          max_sigma_px: 1.75
+          max_shift_px: 0.50
+          field_sigma: 0.45
+          regularization:
+            psf_second_moment: 0.75
+            field_smoothness: 0.35
+            chromatic_smoothness: 0.20
+            coma_shift: 0.35
+            kernel_tv: 0.03
+      model: &segformer_b0
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+        num_classes: 19
+        ignore_index: 255
+      train: &fast_train
+        epochs: 12
+        lr: 0.00014
+        weight_decay: 0.0001
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 4
+        early_stop_min_delta: 0.001
+        task_feedback_weight: 0.10
+        ce_weight: 0.65
+        overlap_weight: 0.35
+        smooth_lambda: 0.04
+        sensor_lr_mult: 0.08
+        sensor_lr_component_scales:
+          optics: 0.35
+          cfa: 10.0
+          exposure: 2.0
+          noise_adc: 1.5
+          readout: 4.0
+        sensor_reg_weight: 0.0008
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        distill_hard_weight: 0.04
+        distill_boundary_weight: 1.25
+        sensor_warmup_epochs: 2
+        camera_curriculum_epochs: 4
+        deployable_task_weight: 0.45
+        deployable_task_start_epoch: 3
+        deployable_task_apply_to_model: false
+        train_deploy_probe_batches: 16
+        sensor_trust_region: &sensor_trust_region
+          enabled: true
+          counterfactual_interval: 25
+          harm_tolerance: 0.003
+          improve_tolerance: 0.001
+          shrink_factor: 0.5
+          expand_factor: 1.06
+          min_lr_mult: 0.05
+          max_lr_mult: 1.0
+          good_patience: 3
+          revert_on_harm: false
+      eval: &fast_eval
+        viz_every: 100
+        train_viz_steps: [1, 100]
+        include_stages_in_viz: true
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+      distillation: &rgb_teacher_distill
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+
+  - name: kitti360_lowlight_codesign_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor: &lowlight_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        task_token_channels: 8
+        task_token_hidden_channels: 24
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: true
+        sensor_model: deeplens_nbit
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        black_level: 4
+        iso_base: 100
+        iso: 400
+        iso_scale: 1000
+        exposure_init: -2.94443898
+        bit_depth: 6
+        read_noise_std: 2.0
+        shot_noise_scale: 0.55
+        min_read_noise_std: 0.00001
+        max_read_noise_std: 8.0
+        min_shot_noise_scale: 0.00001
+        max_shot_noise_scale: 1.5
+        min_bit_depth: 4
+        max_bit_depth: 8
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization:
+          cfa_collapse: 0.02
+          exposure_prior: 0.02
+          read_noise_prior: 0.02
+          shot_noise_prior: 0.02
+          bit_depth_prior: 0.04
+          task_token_collapse: 0.02
+          task_token_residual_energy: 0.01
+          task_token_weight_l2: 0.0001
+      lens:
+        learn_optics: true
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.22
+        sensor_reg_weight: 0.0005
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        distill_hard_weight: 0.04
+        distill_boundary_weight: 1.25
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_lowbit4_codesign_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor: &lowbit_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        task_token_channels: 8
+        task_token_hidden_channels: 24
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: true
+        sensor_model: deeplens_nbit
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        black_level: 1
+        iso_base: 100
+        iso: 200
+        iso_scale: 1000
+        exposure_init: -1.38629436
+        bit_depth: 4
+        read_noise_std: 1.0
+        shot_noise_scale: 0.35
+        min_read_noise_std: 0.00001
+        max_read_noise_std: 6.0
+        min_shot_noise_scale: 0.00001
+        max_shot_noise_scale: 1.2
+        min_bit_depth: 4
+        max_bit_depth: 6
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization:
+          cfa_collapse: 0.02
+          exposure_prior: 0.04
+          read_noise_prior: 0.03
+          shot_noise_prior: 0.03
+          bit_depth_prior: 0.08
+          task_token_collapse: 0.02
+          task_token_residual_energy: 0.01
+          task_token_weight_l2: 0.0001
+      lens:
+        learn_optics: true
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.22
+        sensor_reg_weight: 0.0005
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        distill_hard_weight: 0.04
+        distill_boundary_weight: 1.25
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_clean_codesign_tasktokens_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor:
+        <<: *clean_learned_sensor
+        raw_output: task_tokens
+      lens: *mild_learned_lens
+      model: *segformer_b0
+      train: *fast_train
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_lowlight_codesign_tasktokens_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor:
+        <<: *lowlight_learned_sensor
+        raw_output: task_tokens
+      lens:
+        learn_optics: true
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.22
+        sensor_reg_weight: 0.0005
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        distill_hard_weight: 0.04
+        distill_boundary_weight: 1.25
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_lowbit4_codesign_tasktokens_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor:
+        <<: *lowbit_learned_sensor
+        raw_output: task_tokens
+      lens:
+        learn_optics: true
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.22
+        sensor_reg_weight: 0.0005
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        distill_hard_weight: 0.04
+        distill_boundary_weight: 1.25
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_clean_codesign_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor: *clean_learned_sensor
+      lens: *mild_learned_lens
+      model: &segformer_b1
+        name: segformer_b1
+        pretrained: true
+        hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+        num_classes: 19
+        ignore_index: 255
+      train:
+        <<: *fast_train
+        lr: 0.00008
+        accum_steps: 4
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_clean_codesign_ddrlite
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor: *clean_learned_sensor
+      lens: *mild_learned_lens
+      model: &ddrlite
+        name: ddrnet_lite
+        width: 72
+        num_classes: 19
+        ignore_index: 255
+      train:
+        <<: *fast_train
+        lr: 0.0008
+        sensor_lr_mult: 0.12
+        distill_weight: 0.12
+        distill_hard_weight: 0.06
+        distill_boundary_weight: 1.50
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_clean_rgb_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline:
+        input: rgb
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.0
+      eval: *fast_eval
+
+  - name: kitti360_clean_rgb_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline:
+        input: rgb
+      model: *segformer_b1
+      train:
+        <<: *fast_train
+        lr: 0.00008
+        accum_steps: 4
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.0
+        distill_hard_weight: 0.0
+        distill_boundary_weight: 0.0
+      eval: *fast_eval
+
+  - name: kitti360_clean_rgb_ddrlite
+    overrides:
+      data: *kitti_data
+      pipeline:
+        input: rgb
+      model: *ddrlite
+      train:
+        <<: *fast_train
+        lr: 0.0008
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.12
+        distill_hard_weight: 0.06
+        distill_boundary_weight: 1.50
+      eval: *fast_eval
+      distillation: *rgb_teacher_distill
+
+  - name: kitti360_clean_fixed_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor: &clean_fixed_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+        trainable_psf:
+          base_sigma_px: 0.55
+          min_sigma_px: 0.20
+          max_sigma_px: 1.75
+          max_shift_px: 0.50
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.0
+      eval: *fast_eval
+
+  - name: kitti360_lowlight_fixed_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor:
+        <<: *lowlight_learned_sensor
+        raw_output: soft_rgb
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+        regularization: {}
+      lens:
+        learn_optics: false
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.0
+      eval: *fast_eval
+
+  - name: kitti360_lowbit4_fixed_segformer_b0
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      sensor:
+        <<: *lowbit_learned_sensor
+        raw_output: soft_rgb
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+        regularization: {}
+      lens:
+        learn_optics: false
+      model: *segformer_b0
+      train:
+        <<: *fast_train
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        smooth_lambda: 0.02
+        distill_weight: 0.0
+      eval: *fast_eval

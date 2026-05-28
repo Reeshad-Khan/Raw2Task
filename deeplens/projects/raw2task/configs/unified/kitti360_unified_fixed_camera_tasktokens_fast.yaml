@@ -1,0 +1,107 @@
+name: kitti360_unified_fixed_camera_tasktokens_fast
+seed: 0
+device: cuda
+
+pipeline:
+  input: sensor
+
+data_2d:
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [256, 768]
+  camera: image_00
+  label_encoding: original_id
+  batch_size: 4
+  photometric_jitter: 0.15
+  train_stride: 2
+  val_stride: 4
+  max_train_samples: 12000
+  max_val_samples: 2000
+
+data_voxel:
+  root: data_external/kitti360_occupancy
+  train_manifest: data_external/kitti360_occupancy/manifests/train.jsonl
+  val_manifest: data_external/kitti360_occupancy/manifests/val.jsonl
+  image_size: [192, 640]
+  grid_shape: [16, 64, 128]
+  num_cameras: 1
+  batch_size: 1
+  require_calibration: true
+  require_camera_mask: true
+  max_train_samples: 400
+  max_val_samples: 100
+
+model:
+  width: 64
+  num_classes: 19
+  num_2d_classes: 19
+  num_3d_classes: 19
+  ignore_index: 255
+
+sensor:
+  raw_output: task_tokens
+  task_token_channels: 8
+  task_token_hidden_channels: 16
+  task_token_use_soft_rgb: true
+  task_token_use_iso: true
+  learn_task_token_readout: false
+  cfa_init: bayer_rggb
+  exposure_init: -1.38629436
+  learn_cfa: false
+  learn_exposure: false
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+  learn_noise: false
+  learn_bit_depth: false
+  min_read_noise_std: 0.00001
+  max_read_noise_std: 0.05
+  min_shot_noise_scale: 0.00001
+  max_shot_noise_scale: 0.12
+  min_bit_depth: 4
+  max_bit_depth: 12
+  sensor_pitch: 1.6e-6
+  regularization:
+    cfa_collapse: 0.05
+    exposure_prior: 0.10
+    read_noise_prior: 0.05
+    shot_noise_prior: 0.05
+    bit_depth_prior: 0.02
+
+lens:
+  mode: trainable_psf
+  path: ""
+  learn_optics: false
+  trainable_psf:
+    num_zones: 5
+    kernel_size: 15
+    base_sigma_px: 0.85
+    min_sigma_px: 0.25
+    max_sigma_px: 2.50
+    max_shift_px: 1.00
+    field_sigma: 0.55
+    init_field_aberration: true
+    regularization:
+      psf_second_moment: 1.0
+      field_smoothness: 0.25
+      chromatic_smoothness: 0.10
+      coma_shift: 0.25
+      kernel_tv: 0.02
+
+train:
+  epochs: 8
+  steps_per_epoch: 500
+  num_workers: 4
+  lr: 0.0002
+  weight_decay: 0.0001
+  sensor_lr_mult: 0.0
+  sensor_reg_weight: 0.0005
+  lambda_2d: 1.0
+  lambda_3d: 1.0
+  lambda_occupancy: 0.25
+  ckpt_dir: ./runs/unified_multitask/kitti360_unified_fixed_camera_tasktokens_fast
+  log_interval: 25
+  amp: true
+  grad_clip_norm: 1.0
+  viz_interval: 1
+  viz_items: 3
+  export_design_every: 1

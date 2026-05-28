@@ -4,12 +4,16 @@ import random
 from glob import glob
 
 import cv2 as cv
-import lpips
 import numpy as np
 import torch
 from skimage.metrics import peak_signal_noise_ratio
 from skimage.metrics import structural_similarity
 from tqdm import tqdm
+
+try:
+    import lpips
+except Exception:
+    lpips = None
 
 
 # ==================================
@@ -118,6 +122,8 @@ def batch_ssim(img, img_clean):
 
 def batch_LPIPS(img, img_clean):
     """Compute LPIPS loss for image batch."""
+    if lpips is None:
+        raise ImportError("LPIPS is optional. Install `lpips` to use batch_LPIPS().")
     device = img.device
     loss_fn = lpips.LPIPS(net="vgg", spatial=True)
     loss_fn.to(device)

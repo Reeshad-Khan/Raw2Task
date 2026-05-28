@@ -1,0 +1,288 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/kitti360_2026_competitive
+seeds: [0, 1, 2]
+
+# Phased matrix for reaching stronger 2026-comparable mIoU.
+# Run phase-by-phase with --only to control cost.
+experiments:
+  # =========================
+  # Phase 1: Protocol anchors
+  # =========================
+  - name: p1_codesign_liteseg_ref
+    overrides: {}
+
+  - name: p1_rgb_liteseg_ref
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: liteseg
+        width: 48
+      train:
+        sensor_lr_mult: 0.0
+
+  # ===================================
+  # Phase 2: Strong RGB-only baselines
+  # ===================================
+  - name: p2_rgb_segformer_b0_pretrained
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 160
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: p2_rgb_segformer_b1_pretrained
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 1
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b1
+        pretrained: true
+        hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 160
+        lr: 0.00015
+        sensor_lr_mult: 0.0
+        accum_steps: 4
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: p2_rgb_segformer_b2_pretrained
+    overrides:
+      data:
+        img_size: [320, 1024]
+        batch_size: 1
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b2
+        pretrained: true
+        hf_model_id: nvidia/segformer-b2-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 160
+        lr: 0.00015
+        sensor_lr_mult: 0.0
+        accum_steps: 4
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: p2_rgb_lraspp_efficientnet_b0
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: rgb
+      model:
+        name: lraspp_efficientnet_b0
+        pretrained_backbone: true
+        timm_model: efficientnet_b0
+      train:
+        epochs: 160
+        lr: 0.00025
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  # ===========================================
+  # Phase 3: Co-design with stronger backbones
+  # ===========================================
+  - name: p3_codesign_segformer_b0_pretrained
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 160
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        smooth_lambda: 0.08
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+      debug:
+        bypass_optics: false
+        bypass_cfa: false
+        bypass_noise: false
+
+  - name: p3_codesign_segformer_b1_pretrained
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 1
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b1
+        pretrained: true
+        hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 160
+        lr: 0.00015
+        sensor_lr_mult: 0.12
+        smooth_lambda: 0.08
+        accum_steps: 4
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+      debug:
+        bypass_optics: false
+        bypass_cfa: false
+        bypass_noise: false
+
+  - name: p3_codesign_lraspp_efficientnet_b0
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: lraspp_efficientnet_b0
+        pretrained_backbone: true
+        timm_model: efficientnet_b0
+      train:
+        epochs: 160
+        lr: 0.00025
+        sensor_lr_mult: 0.2
+        smooth_lambda: 0.08
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+      debug:
+        bypass_optics: false
+        bypass_cfa: false
+        bypass_noise: false
+
+  # ==========================================
+  # Phase 4: Controlled camera ablations (SOTA)
+  # ==========================================
+  - name: p4_segformer_b0_no_optics
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+      train:
+        epochs: 160
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: p4_segformer_b0_fixed_frontend
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      train:
+        epochs: 160
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true

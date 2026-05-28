@@ -1,0 +1,328 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/constrained_codesign_fast
+seeds: [0]
+
+# Fast feasibility gate for the revised paper claim.
+#
+# Hypothesis tested here:
+#   Learned fixed-at-inference optics/sensor settings help most when the camera
+#   is the bottleneck: low light, high sensor noise, or few ADC bits.
+#
+# Keep this matrix deliberately small. If these B1 paired controls do not show a
+# positive co-design-minus-fixed delta, full training and component ablations are
+# not worth running.
+experiments:
+  - name: constrained_clean_codesign_segformer_b1
+    overrides:
+      data: &kitti_data
+        name: kitti360_seg
+        root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+        label_encoding: original_id
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 6000
+        max_val_samples: 1200
+        train_stride: 2
+        val_stride: 4
+        rare_oversample_factor: 2.0
+        photometric_jitter: 0.12
+        viewpoint_jitter:
+          enabled: true
+          prob: 0.25
+          max_pitch_frac: 0.08
+          max_height_frac: 0.05
+          max_shift_frac: 0.04
+          max_yaw_frac: 0.03
+      pipeline: &sensor_pipeline
+        input: sensor
+      task_isp: &task_isp_adapter
+        enabled: true
+        type: task_aware_modulation
+        hidden_channels: 24
+        residual_scale: 0.18
+        regional_grid: 8
+        clamp_output: true
+      sensor: &clean_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        exposure_init: -1.38629436
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization: &clean_sensor_reg
+          cfa_collapse: 0.03
+          exposure_prior: 0.05
+          read_noise_prior: 0.03
+          shot_noise_prior: 0.03
+          bit_depth_prior: 0.04
+      lens: &learned_lens
+        learn_optics: true
+        trainable_psf:
+          num_zones: 5
+          kernel_size: 13
+          base_sigma_px: 0.55
+          min_sigma_px: 0.20
+          max_sigma_px: 1.75
+          max_shift_px: 0.50
+          field_sigma: 0.45
+          regularization:
+            psf_second_moment: 0.75
+            field_smoothness: 0.35
+            chromatic_smoothness: 0.20
+            coma_shift: 0.35
+            kernel_tv: 0.03
+      model: &segformer_b1
+        name: segformer_b1
+        pretrained: true
+        hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+        num_classes: 19
+        ignore_index: 255
+      train: &fast_train
+        epochs: 12
+        lr: 0.00008
+        weight_decay: 0.0001
+        accum_steps: 4
+        ema: true
+        ema_decay: 0.999
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 4
+        early_stop_min_delta: 0.001
+        ce_weight: 0.65
+        overlap_weight: 0.35
+        smooth_lambda: 0.04
+        sensor_lr_mult: 0.08
+        sensor_lr_component_scales: &sensor_lr_component_scales
+          optics: 0.35
+          cfa: 10.0
+          exposure: 2.0
+          noise_adc: 1.5
+          readout: 1.0
+        sensor_reg_weight: 0.0008
+        semantic_snr_weight: 0.04
+        semantic_snr_nonboundary_weight: 0.20
+        semantic_snr_start_epoch: 2
+        sensor_warmup_epochs: 2
+        camera_curriculum_epochs: 4
+        deployable_task_weight: 0.12
+        deployable_task_start_epoch: 3
+        deployable_task_apply_to_model: false
+        aux_losses_update_adapter: true
+        fixed_sensor_advantage_weight: 0.05
+        fixed_sensor_advantage_margin: 0.0
+        fixed_sensor_advantage_start_epoch: 3
+        fixed_sensor_advantage_apply_to_model: false
+        freeze_backbone_during_sensor_stage: true
+        sensor_rollback_on_val_drop: true
+        sensor_rollback_val_tolerance: 0.006
+        sensor_rollback_shrink: 0.5
+        sensor_freeze_after_best_patience: 2
+        sensor_freeze_restore_best: true
+        train_deploy_probe_batches: 16
+        deploy_guard: &deploy_guard
+          enabled: true
+          start_alpha: 0.999
+          batch_miou_ratio: 0.45
+          val_drop_tolerance: 0.008
+          probe_drop_tolerance: 0.08
+          patience: 2
+          shrink_factor: 0.35
+          min_lr_mult: 0.01
+          freeze_after_actions: 3
+        sensor_trust_region: &sensor_trust_region
+          enabled: true
+          counterfactual_interval: 25
+          harm_tolerance: 0.003
+          improve_tolerance: 0.001
+          shrink_factor: 0.5
+          expand_factor: 1.06
+          min_lr_mult: 0.05
+          max_lr_mult: 1.0
+          good_patience: 3
+          revert_on_harm: true
+          revert_threshold: 0.012
+      eval: &fast_eval
+        viz_every: 100
+        train_viz_steps: [1, 100]
+        include_stages_in_viz: true
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: constrained_clean_fixed_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      task_isp: *task_isp_adapter
+      sensor: &clean_fixed_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens: &fixed_lens
+        learn_optics: false
+        trainable_psf:
+          base_sigma_px: 0.55
+          min_sigma_px: 0.20
+          max_sigma_px: 1.75
+          max_shift_px: 0.50
+      model: *segformer_b1
+      train: &fixed_train
+        <<: *fast_train
+        sensor_lr_mult: 0.0
+        sensor_reg_weight: 0.0
+        sensor_warmup_epochs: 0
+        camera_curriculum_epochs: 0
+        deployable_task_weight: 0.0
+        aux_losses_update_adapter: false
+        fixed_sensor_advantage_weight: 0.0
+        freeze_backbone_during_sensor_stage: false
+        sensor_freeze_after_best_patience: 0
+        sensor_freeze_restore_best: false
+        sensor_rollback_on_val_drop: false
+        semantic_snr_weight: 0.0
+        smooth_lambda: 0.02
+      eval: *fast_eval
+
+  - name: constrained_clean_rgb_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline:
+        input: rgb
+      task_isp: *task_isp_adapter
+      model: *segformer_b1
+      train:
+        <<: *fixed_train
+      eval: *fast_eval
+
+  - name: constrained_lowlight_codesign_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      task_isp: *task_isp_adapter
+      sensor: &lowlight_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        sensor_model: deeplens_nbit
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        black_level: 4
+        iso_base: 100
+        iso: 400
+        iso_scale: 1000
+        exposure_init: -2.94443898
+        bit_depth: 6
+        read_noise_std: 2.0
+        shot_noise_scale: 0.55
+        min_read_noise_std: 0.00001
+        max_read_noise_std: 8.0
+        min_shot_noise_scale: 0.00001
+        max_shot_noise_scale: 1.5
+        min_bit_depth: 4
+        max_bit_depth: 8
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization: &lowlight_sensor_reg
+          cfa_collapse: 0.02
+          exposure_prior: 0.02
+          read_noise_prior: 0.02
+          shot_noise_prior: 0.02
+          bit_depth_prior: 0.04
+      lens: *learned_lens
+      model: *segformer_b1
+      train: &constrained_train
+        <<: *fast_train
+        sensor_lr_mult: 0.08
+        sensor_reg_weight: 0.001
+      eval: *fast_eval
+
+  - name: constrained_lowlight_fixed_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      task_isp: *task_isp_adapter
+      sensor:
+        <<: *lowlight_learned_sensor
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+        regularization: {}
+      lens: *fixed_lens
+      model: *segformer_b1
+      train: *fixed_train
+      eval: *fast_eval
+
+  - name: constrained_lowbit4_codesign_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      task_isp: *task_isp_adapter
+      sensor: &lowbit_learned_sensor
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        sensor_model: deeplens_nbit
+        cfa_init_floor: 0.08
+        cfa_temperature_start: 2.0
+        cfa_temperature_end: 1.0
+        cfa_temperature_epochs: 6
+        cfa_min_transmittance: 0.01
+        black_level: 1
+        iso_base: 100
+        iso: 200
+        iso_scale: 1000
+        exposure_init: -1.38629436
+        bit_depth: 4
+        read_noise_std: 1.0
+        shot_noise_scale: 0.35
+        min_read_noise_std: 0.00001
+        max_read_noise_std: 6.0
+        min_shot_noise_scale: 0.00001
+        max_shot_noise_scale: 1.2
+        min_bit_depth: 4
+        max_bit_depth: 6
+        learn_cfa: true
+        learn_exposure: true
+        learn_noise: true
+        learn_bit_depth: true
+        regularization: &lowbit_sensor_reg
+          cfa_collapse: 0.02
+          exposure_prior: 0.04
+          read_noise_prior: 0.03
+          shot_noise_prior: 0.03
+          bit_depth_prior: 0.08
+      lens: *learned_lens
+      model: *segformer_b1
+      train: *constrained_train
+      eval: *fast_eval
+
+  - name: constrained_lowbit4_fixed_segformer_b1
+    overrides:
+      data: *kitti_data
+      pipeline: *sensor_pipeline
+      task_isp: *task_isp_adapter
+      sensor:
+        <<: *lowbit_learned_sensor
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+        regularization: {}
+      lens: *fixed_lens
+      model: *segformer_b1
+      train: *fixed_train
+      eval: *fast_eval

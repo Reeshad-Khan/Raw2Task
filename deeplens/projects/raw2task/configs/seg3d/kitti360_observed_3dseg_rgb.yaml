@@ -1,0 +1,56 @@
+name: kitti360_observed_3dseg_rgb
+seed: 0
+device: cuda
+
+data:
+  root: data_external/kitti360_occupancy
+  train_manifest: data_external/kitti360_occupancy/manifests/train.jsonl
+  val_manifest: data_external/kitti360_occupancy/manifests/val.jsonl
+  image_size: [192, 640]
+  grid_shape: [16, 64, 128]
+  num_cameras: 1
+  batch_size: 2
+  num_workers: 4
+  require_calibration: true
+  require_camera_mask: true
+  task_variant: observed_3d_semantic_segmentation
+
+pipeline:
+  input: rgb
+
+model:
+  num_classes: 19
+  ignore_index: 255
+  width: 64
+
+sensor:
+  raw_output: packed
+
+lens:
+  mode: identity
+  path: ""
+  learn_optics: false
+
+train:
+  epochs: 40
+  batch_size: 2
+  num_workers: 4
+  lr: 0.0002
+  weight_decay: 0.0001
+  sensor_lr_mult: 0.0
+  task_feedback_weight: 0.12
+  task_feedback_entropy_weight: 0.50
+  task_feedback_error_weight: 1.00
+  task_feedback_boundary_weight: 1.00
+  task_feedback_occupied_weight: 1.50
+  task_feedback_detach: true
+  task_feedback_controller: true
+  task_feedback_controller_ema: 0.70
+  task_feedback_iou_gamma: 1.50
+  task_feedback_min_pressure: 0.75
+  task_feedback_max_pressure: 2.50
+  task_feedback_min_support: 1000
+  ckpt_dir: ./runs/seg3d/kitti360_observed_3dseg_rgb
+  log_interval: 20
+  amp: true
+  grad_clip_norm: 1.0

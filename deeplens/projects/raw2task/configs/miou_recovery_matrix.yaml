@@ -1,0 +1,116 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/miou_recovery_matrix
+seeds: [0]
+
+# Focused matrix for improving absolute KITTI-360 mIoU.
+# These runs are heavier than the lightweight claim rows and should be used as
+# an upper-performance anchor, not as the embedded-efficiency headline.
+experiments:
+  - name: kitti360_codesign_liteseg_w96_highres
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+        rare_oversample_factor: 4.0
+        photometric_jitter: 0.15
+      sensor:
+        raw_output: packed
+      model:
+        name: liteseg_aspp
+        width: 96
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.25
+        accum_steps: 4
+        epochs: 80
+        log_interval: 100
+
+  - name: kitti360_fixed_camera_liteseg_w96_highres
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+        rare_oversample_factor: 4.0
+        photometric_jitter: 0.15
+      model:
+        name: liteseg_aspp
+        width: 96
+      sensor:
+        raw_output: packed
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+        accum_steps: 4
+        epochs: 80
+        log_interval: 100
+
+  - name: kitti360_rgb_liteseg_w96_highres
+    overrides:
+      pipeline:
+        input: rgb
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+        rare_oversample_factor: 4.0
+        photometric_jitter: 0.15
+      model:
+        name: liteseg_aspp
+        width: 96
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+        accum_steps: 4
+        epochs: 80
+        log_interval: 100
+
+  - name: kitti360_rgb_segformer_b0_cityscapes_highres
+    overrides:
+      pipeline:
+        input: rgb
+      data:
+        img_size: [384, 1280]
+        batch_size: 1
+        rare_oversample_factor: 2.0
+      model:
+        name: segformer
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+        pretrained: true
+        local_files_only: false
+        normalize_input: true
+      train:
+        lr: 0.00006
+        sensor_lr_mult: 0.0
+        accum_steps: 4
+        epochs: 40
+        log_interval: 100
+        ce_weight: 0.7
+        overlap_weight: 0.3
+
+  - name: kitti360_codesign_segformer_b0_cityscapes_highres
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 1
+        rare_oversample_factor: 2.0
+      sensor:
+        raw_output: packed
+      model:
+        name: segformer
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+        pretrained: true
+        local_files_only: false
+        normalize_input: true
+      train:
+        lr: 0.00006
+        sensor_lr_mult: 0.05
+        accum_steps: 4
+        epochs: 40
+        log_interval: 100
+        ce_weight: 0.7
+        overlap_weight: 0.3

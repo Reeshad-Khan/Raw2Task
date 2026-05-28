@@ -1,0 +1,48 @@
+name: kitti360_seg_modern_segformer_b2_smoke
+seed: 42
+task: seg
+
+data:
+  name: kitti360_seg
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [192, 640]
+  camera: image_00
+  label_encoding: original_id
+  batch_size: 8
+  num_workers: 4
+  train_stride: 1
+  val_stride: 1
+
+pipeline:
+  input: rgb
+
+model:
+  name: segformer_b2
+  num_classes: 19
+  ignore_index: 255
+  pretrained: true
+  hf_model_id: nvidia/segformer-b2-finetuned-cityscapes-1024-1024
+
+train:
+  epochs: 1
+  depth: 1.0
+  lr: 0.002
+  weight_decay: 0.0001
+  ckpt_dir: ./runs/modern_backbones/segformer_b2_smoke
+  log_interval: 50
+  resume: false
+  amp: false
+  accum_steps: 1
+  channels_last: false
+  torch_compile: false
+
+debug:
+  bypass_optics: true
+  bypass_cfa: true
+  bypass_noise: true
+
+eval:
+  viz_every: 200
+  train_viz_steps: [1]
+  include_stages_in_viz: true
+  use_crf: false

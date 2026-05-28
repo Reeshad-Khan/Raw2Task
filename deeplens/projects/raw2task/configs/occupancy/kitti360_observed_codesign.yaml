@@ -1,0 +1,93 @@
+name: kitti360_observed_occupancy_codesign
+seed: 0
+device: cuda
+
+data:
+  root: data_external/kitti360_occupancy
+  train_manifest: data_external/kitti360_occupancy/manifests/train.jsonl
+  val_manifest: data_external/kitti360_occupancy/manifests/val.jsonl
+  image_size: [192, 640]
+  grid_shape: [16, 64, 128]
+  num_cameras: 1
+  batch_size: 2
+  num_workers: 4
+  require_calibration: true
+  require_camera_mask: true
+
+pipeline:
+  input: sensor
+
+model:
+  num_classes: 19
+  ignore_index: 255
+  width: 64
+
+sensor:
+  raw_output: packed
+  cfa_init: bayer_rggb
+  exposure_init: 0.0
+  learn_cfa: true
+  learn_exposure: true
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+  learn_noise: true
+  learn_bit_depth: true
+  min_read_noise_std: 0.00001
+  max_read_noise_std: 0.05
+  min_shot_noise_scale: 0.00001
+  max_shot_noise_scale: 0.12
+  min_bit_depth: 4
+  max_bit_depth: 12
+  sensor_pitch: 1.6e-6
+  regularization:
+    cfa_collapse: 0.05
+    exposure_prior: 0.10
+    read_noise_prior: 0.05
+    shot_noise_prior: 0.05
+    bit_depth_prior: 0.02
+
+lens:
+  mode: trainable_psf
+  path: ""
+  learn_optics: true
+  trainable_psf:
+    num_zones: 5
+    kernel_size: 15
+    base_sigma_px: 0.85
+    min_sigma_px: 0.25
+    max_sigma_px: 2.50
+    max_shift_px: 1.00
+    field_sigma: 0.55
+    init_field_aberration: true
+    regularization:
+      psf_second_moment: 1.0
+      field_smoothness: 0.25
+      chromatic_smoothness: 0.10
+      coma_shift: 0.25
+      kernel_tv: 0.02
+
+train:
+  epochs: 40
+  batch_size: 2
+  num_workers: 4
+  lr: 0.0002
+  weight_decay: 0.0001
+  sensor_lr_mult: 0.10
+  sensor_reg_weight: 0.0005
+  task_feedback_weight: 0.12
+  task_feedback_entropy_weight: 0.50
+  task_feedback_error_weight: 1.00
+  task_feedback_boundary_weight: 1.00
+  task_feedback_occupied_weight: 1.50
+  task_feedback_detach: true
+  task_feedback_controller: true
+  task_feedback_controller_ema: 0.70
+  task_feedback_iou_gamma: 1.50
+  task_feedback_min_pressure: 0.75
+  task_feedback_max_pressure: 2.50
+  task_feedback_min_support: 1000
+  ckpt_dir: ./runs/occupancy/kitti360_observed_codesign
+  log_interval: 20
+  amp: true
+  grad_clip_norm: 1.0

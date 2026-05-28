@@ -1,0 +1,101 @@
+name: kitti360_seg_modern_lraspp_efficientnet_b0_codesign_full
+seed: 0
+task: seg
+
+data:
+  name: kitti360_seg
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [192, 640]
+  camera: image_00
+  label_encoding: original_id
+  batch_size: 8
+  num_workers: 4
+  train_stride: 1
+  val_stride: 1
+
+pipeline:
+  input: sensor
+
+model:
+  name: lraspp_efficientnet_b0
+  num_classes: 19
+  ignore_index: 255
+  pretrained_backbone: true
+  timm_model: efficientnet_b0
+
+sensor:
+  cfa_init: bayer_rggb
+  exposure_init: 0.0
+  learn_cfa: true
+  learn_exposure: true
+  sensor_pitch: 1.6e-6
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+  regularization:
+    cfa_collapse: 0.05
+    exposure_prior: 0.10
+
+lens:
+  mode: trainable_psf
+  path: ""
+  learn_optics: true
+  spp: 1
+  render_scale: 1.0
+  no_grad: false
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+  trainable_psf:
+    num_zones: 5
+    kernel_size: 15
+    base_sigma_px: 1.05
+    min_sigma_px: 0.35
+    max_sigma_px: 3.75
+    max_shift_px: 1.25
+    field_sigma: 0.65
+    init_field_aberration: true
+    regularization:
+      psf_second_moment: 1.0
+      field_smoothness: 0.25
+      chromatic_smoothness: 0.10
+      coma_shift: 0.25
+      kernel_tv: 0.02
+
+train:
+  epochs: 80
+  depth: 10.0
+  lr: 0.002
+  weight_decay: 0.0001
+  sensor_lr_mult: 0.5
+  ckpt_dir: ./runs/modern_backbones/lraspp_efficientnet_b0_codesign_full
+  log_interval: 100
+  resume: false
+  amp: true
+  accum_steps: 1
+  channels_last: false
+  torch_compile: false
+  keep_last_n: 3
+  ce_weight: 0.6
+  overlap_weight: 0.4
+  overlap_loss: lovasz
+  use_lovasz: true
+  ohem_pct: 0.25
+  smooth_lambda: 0.05
+  smooth_sigma_rgb: 0.10
+  sensor_reg_weight: 0.001
+  export_design_every: 1
+  grad_clip_norm: 1.0
+  early_stop_patience: 0
+
+debug:
+  bypass_optics: false
+  bypass_cfa: false
+  bypass_noise: false
+  dump_stats: false
+
+eval:
+  viz_every: 200
+  train_viz_steps: [1]
+  include_stages_in_viz: true
+  use_crf: false

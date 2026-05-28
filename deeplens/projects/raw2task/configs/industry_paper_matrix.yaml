@@ -1,0 +1,462 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/industry_paper_matrix
+seeds: [0, 1, 2]
+
+# This matrix is intentionally explicit. It separates:
+# - component evidence: one-factor camera ablations on KITTI-360
+# - modern backbone evidence: compact and 2025-era segmentation families
+# - dataset evidence: Cityscapes and ACDC via the read-only WorldFactor mirror
+experiments:
+  # Main claim and component ablations on the paper's original KITTI-360 setup.
+  - name: kitti360_codesign_liteseg
+    overrides: {}
+
+  - name: kitti360_no_optics
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
+  - name: kitti360_fixed_optics
+    overrides:
+      lens:
+        learn_optics: false
+
+  - name: kitti360_fixed_cfa
+    overrides:
+      sensor:
+        learn_cfa: false
+
+  - name: kitti360_no_noise_quant
+    overrides:
+      debug:
+        bypass_noise: true
+
+  - name: kitti360_fixed_noise_quant
+    overrides:
+      sensor:
+        learn_noise: false
+        learn_bit_depth: false
+
+  - name: kitti360_fixed_exposure
+    overrides:
+      sensor:
+        exposure_init: -1.38629436
+        learn_exposure: false
+
+  - name: kitti360_fixed_camera_frontend
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: kitti360_rgb_liteseg
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  # Modern RGB baselines on the same split/metric, addressing unfair leaderboard comparisons.
+  - name: kitti360_rgb_lraspp_mobilenetv3
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: lraspp_mobilenet_v3_large
+        pretrained_backbone: true
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+
+  - name: kitti360_rgb_deeplabv3_mobilenetv3
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: deeplabv3_mobilenet_v3_large
+        pretrained_backbone: true
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+
+  - name: kitti360_rgb_segformer_b0
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: segformer
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        lr: 0.0003
+        sensor_lr_mult: 0.0
+
+  # High-accuracy protocol anchors. These avoid the old one-channel RAW
+  # bottleneck by using a differentiable CFA-aware RGB readout after the
+  # learned optics/CFA/noise/ADC frontend.
+  - name: kitti360_codesign_segformer_b0_pretrained_softreadout
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_fixed_camera_segformer_b0_pretrained_softreadout
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_codesign_segformer_b0_pretrained_tasktokens
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_fixed_camera_segformer_b0_pretrained_tasktokens
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: false
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_fixed_frontend_segformer_b0_pretrained_learned_tasktokens
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: true
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_rgb_segformer_b0_pretrained_highres
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_codesign_segformer_b0_pretrained_softreadout_distill
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_fixed_camera_segformer_b0_pretrained_softreadout_distill
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  - name: kitti360_rgb_segformer_b0_pretrained_highres_distill
+    overrides:
+      data:
+        img_size: [384, 1280]
+        batch_size: 2
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 120
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        tta: true
+        tta_scales: [0.75, 1.0, 1.25]
+        tta_flip: true
+
+  # Cross-dataset training with the same co-design machinery.
+  - name: cityscapes_codesign_liteseg
+    overrides:
+      data:
+        name: cityscapes_jsonl
+        root: data_external/worldfactor
+        train_split_file: splits/cityscapes/train.jsonl
+        val_split_file: splits/cityscapes/val.jsonl
+        label_encoding: cityscapes_labelIds
+        img_size: [256, 512]
+        batch_size: 8
+
+  - name: cityscapes_rgb_liteseg
+    overrides:
+      data:
+        name: cityscapes_jsonl
+        root: data_external/worldfactor
+        train_split_file: splits/cityscapes/train.jsonl
+        val_split_file: splits/cityscapes/val.jsonl
+        label_encoding: cityscapes_labelIds
+        img_size: [256, 512]
+        batch_size: 8
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: acdc_codesign_liteseg
+    overrides:
+      data:
+        name: acdc_jsonl
+        root: data_external/worldfactor
+        train_split_file: splits/acdc/train.jsonl
+        val_split_file: splits/acdc/val.jsonl
+        label_encoding: labelTrainIds
+        img_size: [256, 512]
+        batch_size: 8
+
+  - name: acdc_rgb_liteseg
+    overrides:
+      data:
+        name: acdc_jsonl
+        root: data_external/worldfactor
+        train_split_file: splits/acdc/train.jsonl
+        val_split_file: splits/acdc/val.jsonl
+        label_encoding: labelTrainIds
+        img_size: [256, 512]
+        batch_size: 8
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0

@@ -1,0 +1,18 @@
+torch>=2.1
+torchvision>=0.16
+numpy
+pillow
+pyyaml
+tqdm
+pandas
+opencv-python-headless
+matplotlib
+transformers
+
+# Optional efficiency/model-zoo extras:
+# thop
+# fvcore
+# ptflops
+# timm
+# segmentation-models-pytorch
+# pydensecrf

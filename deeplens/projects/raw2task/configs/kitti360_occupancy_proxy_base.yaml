@@ -1,0 +1,145 @@
+name: kitti360_occupancy_proxy_base
+seed: 0
+task: occupancy_proxy
+
+data:
+  name: kitti360_occupancy_proxy
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [256, 768]
+  photometric_jitter: 0.15
+  camera: image_00
+  label_encoding: original_id
+  batch_size: 6
+  num_workers: 4
+  train_stride: 1
+  val_stride: 1
+  # The dynamic occupied class is sparse, so oversample frames containing it.
+  rare_class_ids: [2]
+  rare_oversample_factor: 3.0
+
+pipeline:
+  input: sensor
+
+model:
+  name: liteseg_aspp
+  width: 64
+  num_classes: 3
+  ignore_index: 255
+  pretrained_backbone: false
+
+sensor:
+  raw_output: packed
+  cfa_init: bayer_rggb
+  exposure_init: 0.0
+  learn_cfa: true
+  learn_exposure: true
+  sensor_pitch: 1.6e-6
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+  learn_noise: true
+  learn_bit_depth: true
+  min_read_noise_std: 0.00001
+  max_read_noise_std: 0.05
+  min_shot_noise_scale: 0.00001
+  max_shot_noise_scale: 0.12
+  min_bit_depth: 4
+  max_bit_depth: 12
+  regularization:
+    cfa_collapse: 0.05
+    exposure_prior: 0.10
+    read_noise_prior: 0.05
+    shot_noise_prior: 0.05
+    bit_depth_prior: 0.02
+
+lens:
+  mode: trainable_psf
+  path: ""
+  learn_optics: true
+  spp: 1
+  render_scale: 1.0
+  no_grad: false
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+  trainable_psf:
+    num_zones: 5
+    kernel_size: 15
+    base_sigma_px: 0.85
+    min_sigma_px: 0.25
+    max_sigma_px: 2.50
+    max_shift_px: 1.00
+    field_sigma: 0.55
+    init_field_aberration: true
+    regularization:
+      psf_second_moment: 1.0
+      field_smoothness: 0.25
+      chromatic_smoothness: 0.10
+      coma_shift: 0.25
+      kernel_tv: 0.02
+
+train:
+  epochs: 60
+  depth: 10.0
+  lr: 0.001
+  weight_decay: 0.0001
+  sensor_lr_mult: 0.25
+  ckpt_dir: ./runs/kitti360_occupancy_proxy_base
+  log_interval: 100
+  resume: false
+  keep_last_n: 2
+  amp: true
+  accum_steps: 2
+  channels_last: false
+  torch_compile: false
+  lr_plateau_patience: 4
+  lr_reduce_factor: 0.5
+  min_lr: 0.000003
+  checkpoint_average_k: 3
+  checkpoint_average_source: best
+  checkpoint_average_use_ema: true
+  ce_weight: 0.7
+  overlap_weight: 0.3
+  overlap_loss: lovasz
+  use_lovasz: true
+  ohem_pct: 0.5
+  smooth_lambda: 0.03
+  smooth_sigma_rgb: 0.10
+  task_feedback_weight: 0.12
+  task_feedback_entropy_weight: 0.50
+  task_feedback_error_weight: 1.00
+  task_feedback_boundary_weight: 1.00
+  task_feedback_rare_weight: 1.50
+  task_feedback_detach: true
+  task_feedback_controller: true
+  task_feedback_controller_ema: 0.70
+  task_feedback_iou_gamma: 1.50
+  task_feedback_min_pressure: 0.75
+  task_feedback_max_pressure: 2.50
+  task_feedback_min_support: 1000
+  sensor_reg_weight: 0.0005
+  export_design_every: 1
+  grad_clip_norm: 1.0
+  early_stop_patience: 0
+
+loss:
+  class_weight_batches: 400
+  class_weight_min: 0.10
+  class_weight_max: 10.0
+  rare_class_boost:
+    2: 2.0
+
+debug:
+  bypass_optics: false
+  bypass_cfa: false
+  bypass_noise: false
+  dump_stats: false
+
+eval:
+  viz_every: 200
+  train_viz_steps: [1]
+  include_stages_in_viz: true
+  use_crf: false
+  tta: false
+  tta_scales: [1.0]
+  tta_flip: true

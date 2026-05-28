@@ -19,3 +19,29 @@ lenses/pancake/
 
 # add my own files
 *.ipynb
+
+# Generated experiment artifacts
+checkpoints/
+runs/
+logs/
+logs2/
+test_results/
+oldc kpt/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+
+# Local datasets and downloaded caches
+data/
+data_eval/
+data_external/
+deeplens/data/
+datasets/BSDS300/
+
+# Python/tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/

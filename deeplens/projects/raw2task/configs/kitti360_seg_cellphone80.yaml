@@ -1,0 +1,81 @@
+task: seg
+
+data:
+  name: kitti360_seg
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [192, 640]     # safer multiple-of-16 height
+  camera: image_00
+  batch_size: 128
+  num_workers: 4
+
+train:
+  epochs: 50
+  depth: 10.0
+  lr: 2.0e-3
+  weight_decay: 1.0e-4
+  sensor_lr_mult: 1.0
+  ckpt_dir: ./checkpoints
+  log_interval: 100
+
+  resume: true
+  resume_path: ""           # let it auto-pick ./checkpoints/last.pt
+  load_strict: true
+  keep_last_n: 3
+
+  amp: true
+  accum_steps: 1
+
+  use_lovasz: true
+  ohem_pct: 0.25
+
+  smooth_lambda: 0.15       # start milder; auto-tuner can raise
+  smooth_sigma_rgb: 0.12
+  smooth_sigma_xy: 1.0
+
+  grad_clip_norm: 0.0
+  early_stop_patience: 0
+
+  lr_plateau_patience: 2
+  lr_reduce_factor: 0.5
+  lr_min: 1.0e-6
+  tune_patience: 2
+  bump_ohem_on_plateau: true
+  ohem_step: 0.05
+  ohem_max: 0.5
+  bump_smooth_on_plateau: true
+  smooth_step: 0.02
+  smooth_max: 0.15
+
+lens:
+  path: /home/rk010/Desktop/Research/NurIPS/DeepLens/lenses/cellphone/cellphone80deg.json
+  spp: 1
+  render_scale: 0.75
+  no_grad: true
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+
+sensor:
+  cfa_init: rccc            # ensure supported by LearnableCFA
+  sensor_pitch: 3.0e-6
+  bit_depth: 10
+  read_noise_std: 0.002
+  shot_noise_scale: 0.015
+
+eval:
+  viz_every: 25
+  train_viz_steps: [1, 10, 50]
+  include_stages_in_viz: true
+  use_crf: true
+  crf_iters: 5
+  crf_sxy: 3
+  crf_srgb: 5
+  crf_compat: 3
+
+debug:
+  dump_stats: false
+
+model:
+  width: 32
+  num_classes: 19
+  ignore_index: 255

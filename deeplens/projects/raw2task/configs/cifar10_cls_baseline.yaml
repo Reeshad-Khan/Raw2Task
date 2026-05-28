@@ -1,0 +1,50 @@
+task: cls
+
+data:
+  name: cifar10
+  root: ./data
+  batch_size: 512
+  num_workers: 4
+
+train:
+  epochs: 40
+  lr: 3.0e-3
+  weight_decay: 1.0e-4
+  sensor_lr_mult: 1.0
+  ckpt_dir: ./checkpoints/cifar10_baseline
+  log_interval: 100
+  resume: true
+  resume_path: ""
+  load_strict: true
+  keep_last_n: 3
+  amp: true
+  accum_steps: 1
+  img_res: 32
+
+lens:
+  path: ""      # identity optics for CIFAR
+  spp: 1
+  render_scale: 1.0
+  no_grad: true
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+
+sensor:
+  cfa_init: bayer_rggb
+  sensor_pitch: 2.0e-6
+  bit_depth: 6
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+
+eval:
+  viz_every: 200
+  train_viz_steps: [1]
+  include_stages_in_viz: false
+  use_crf: false
+
+debug:
+  dump_stats: false
+
+model:
+  width: 64

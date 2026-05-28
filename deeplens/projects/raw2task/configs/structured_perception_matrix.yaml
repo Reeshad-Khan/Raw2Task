@@ -1,0 +1,96 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_occupancy_proxy_base.yaml
+out_root: ./runs/structured_perception_matrix
+seeds: [0, 1, 2]
+
+# Second-task evidence for the optics-sensor co-design claim.
+# This is an image-plane driving occupancy proxy derived from semantic labels:
+# free-space / static-occupied / dynamic-occupied. It is intentionally named as
+# a proxy task, not as a calibrated 3D Occ3D-style benchmark.
+experiments:
+  - name: kitti360_occupancy_codesign_liteseg_aspp
+    overrides: {}
+
+  - name: kitti360_occupancy_fixed_camera_liteseg_aspp
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: kitti360_occupancy_no_optics_liteseg_aspp
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
+  - name: kitti360_occupancy_rgb_liteseg_aspp
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: cityscapes_occupancy_codesign_liteseg_aspp
+    overrides:
+      data:
+        name: cityscapes_occupancy_proxy
+        root: data_external/worldfactor
+        train_split_file: splits/cityscapes/train.jsonl
+        val_split_file: splits/cityscapes/val.jsonl
+        label_encoding: cityscapes_labelIds
+        img_size: [256, 512]
+        batch_size: 8
+      train:
+        epochs: 40
+
+  - name: cityscapes_occupancy_rgb_liteseg_aspp
+    overrides:
+      data:
+        name: cityscapes_occupancy_proxy
+        root: data_external/worldfactor
+        train_split_file: splits/cityscapes/train.jsonl
+        val_split_file: splits/cityscapes/val.jsonl
+        label_encoding: cityscapes_labelIds
+        img_size: [256, 512]
+        batch_size: 8
+      pipeline:
+        input: rgb
+      train:
+        epochs: 40
+        sensor_lr_mult: 0.0
+
+  - name: acdc_occupancy_codesign_liteseg_aspp
+    overrides:
+      data:
+        name: acdc_occupancy_proxy
+        root: data_external/worldfactor
+        train_split_file: splits/acdc/train.jsonl
+        val_split_file: splits/acdc/val.jsonl
+        label_encoding: labelTrainIds
+        img_size: [256, 512]
+        batch_size: 8
+      train:
+        epochs: 40
+
+  - name: acdc_occupancy_rgb_liteseg_aspp
+    overrides:
+      data:
+        name: acdc_occupancy_proxy
+        root: data_external/worldfactor
+        train_split_file: splits/acdc/train.jsonl
+        val_split_file: splits/acdc/val.jsonl
+        label_encoding: labelTrainIds
+        img_size: [256, 512]
+        batch_size: 8
+      pipeline:
+        input: rgb
+      train:
+        epochs: 40
+        sensor_lr_mult: 0.0

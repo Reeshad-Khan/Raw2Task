@@ -1,0 +1,92 @@
+# Full co-design setup (best / full components):
+# Optics (GeoLens JSON) + Exposure + Learnable CFA + Poisson/Gaussian noise + N-bit quant + UNetTiny
+# Loss: CE (with OHEM) + Lovasz + edge-aware smoothness
+
+seed: 0
+task: seg
+
+data:
+  name: kitti360_seg
+  # IMPORTANT: set this to your KITTI-360 exported segmentation root
+
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [192, 640]
+  camera: image_00
+  batch_size: 8
+  num_workers: 4
+
+model:
+  width: 32
+  num_classes: 19
+  ignore_index: 255
+
+sensor:
+  cfa_init: bayer_rggb
+  exposure_init: 0.0
+  bit_depth: 10
+  read_noise_std: 0.002
+  shot_noise_scale: 0.015
+  sensor_pitch: 0.0000014
+
+lens:
+  # This file EXISTS in your repo (you showed it under lenses/cellphone/)
+  path: /home/rk010/Desktop/Research/NurIPS/DeepLens/lenses/cellphone/cellphone80deg.json
+  spp: 1
+  render_scale: 0.75
+  no_grad: true
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+
+train:
+  epochs: 50
+  depth: 10.0
+  lr: 0.002
+  weight_decay: 0.0001
+  sensor_lr_mult: 1.0
+  ckpt_dir: ./checkpoints   # your runner script will overwrite this per-ablation
+
+  log_interval: 100
+  resume: false
+  resume_path: ""
+  load_strict: true
+  keep_last_n: 3
+
+  amp: true
+  accum_steps: 1
+
+  # Loss knobs (the “full” recipe you implemented)
+  ce_weight: 0.6
+  overlap_weight: 0.4
+  use_lovasz: true
+  ohem_pct: 0.25
+  smooth_lambda: 0.15
+  smooth_sigma_rgb: 0.12
+  smooth_sigma_xy: 1.0
+
+  # LR + autotune
+  lr_plateau_patience: 2
+  lr_reduce_factor: 0.5
+  lr_min: 1.0e-6
+  tune_patience: 2
+  bump_ohem_on_plateau: true
+  ohem_step: 0.05
+  ohem_max: 0.5
+  bump_smooth_on_plateau: true
+  smooth_step: 0.02
+  smooth_max: 0.15
+
+debug:
+  bypass_optics: false
+  bypass_cfa: false
+  bypass_noise: false
+  dump_stats: false
+
+eval:
+  viz_every: 50
+  train_viz_steps: [1]
+  use_crf: false
+  crf_iters: 5
+  crf_sxy: 3
+  crf_srgb: 5
+  crf_compat: 3

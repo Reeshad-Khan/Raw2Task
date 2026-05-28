@@ -1,0 +1,105 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/kitti360_review_matrix
+seeds: [0, 1, 2]
+
+experiments:
+  - name: codesign_full_liteseg
+    overrides: {}
+
+  - name: ablate_no_optics
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
+  - name: ablate_fixed_optics
+    overrides:
+      lens:
+        learn_optics: false
+
+  - name: ablate_fixed_cfa
+    overrides:
+      sensor:
+        learn_cfa: false
+
+  - name: ablate_no_noise_quant
+    overrides:
+      debug:
+        bypass_noise: true
+
+  - name: ablate_fixed_noise_quant
+    overrides:
+      sensor:
+        learn_noise: false
+        learn_bit_depth: false
+
+  - name: ablate_no_learned_exposure
+    overrides:
+      sensor:
+        exposure_init: 0.0
+        learn_exposure: false
+
+  - name: ablate_fixed_camera_frontend
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_ce_only
+    overrides:
+      train:
+        ce_weight: 1.0
+        overlap_weight: 0.0
+        use_lovasz: false
+        ohem_pct: 1.0
+        smooth_lambda: 0.0
+
+  - name: rgb_liteseg
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: liteseg
+        width: 48
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: rgb_lraspp_mobilenetv3
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: lraspp_mobilenet_v3_large
+        pretrained_backbone: false
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+
+  - name: rgb_deeplabv3_mobilenetv3
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: deeplabv3_mobilenet_v3_large
+        pretrained_backbone: false
+      train:
+        lr: 0.001
+        sensor_lr_mult: 0.0
+
+  - name: rgb_segformer_b0_scratch
+    overrides:
+      pipeline:
+        input: rgb
+      model:
+        name: segformer
+        pretrained: false
+        local_files_only: true
+      train:
+        lr: 0.0003
+        sensor_lr_mult: 0.0

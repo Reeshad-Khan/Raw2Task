@@ -181,6 +181,9 @@ dependencies:
       - sympy==1.13.1
       - tokenizers==0.21.1
       - transformers==4.51.0
+      - timm==0.9.2
+      - segmentation-models-pytorch==0.3.0
+      - efficientnet-pytorch==0.7.1
       - typing-inspection==0.4.0
       - wandb==0.19.9
       # additional packages for 3d view

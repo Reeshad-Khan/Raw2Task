@@ -1,0 +1,395 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/industry_paper_matrix_fast
+seeds: [0]
+
+# Fast evidence matrix for iteration, sanity checks, and figure generation.
+# This is intentionally separate from industry_paper_matrix.yaml so short runs
+# never overwrite or contaminate the final 120-epoch paper protocol.
+experiments:
+  - name: fast_codesign_segformer_b0_softreadout
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_fixed_camera_segformer_b0_softreadout
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_codesign_segformer_b0_tasktokens
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_fixed_camera_segformer_b0_tasktokens
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: false
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_fixed_frontend_learned_tasktokens
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: task_tokens
+        task_token_channels: 8
+        task_token_hidden_channels: 16
+        task_token_use_soft_rgb: true
+        task_token_use_iso: true
+        learn_task_token_readout: true
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_rgb_segformer_b0_highres
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_codesign_segformer_b0_softreadout_distill
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.15
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_fixed_camera_segformer_b0_softreadout_distill
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: sensor
+      sensor:
+        raw_output: soft_rgb
+        demosaic_kernel_size: 5
+        exposure_init: -1.38629436
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        smooth_lambda: 0.04
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false
+
+  - name: fast_rgb_segformer_b0_highres_distill
+    overrides:
+      data:
+        img_size: [256, 768]
+        batch_size: 4
+        max_train_samples: 12000
+        max_val_samples: 2000
+        train_stride: 2
+        val_stride: 4
+      pipeline:
+        input: rgb
+      model:
+        name: segformer_b0
+        pretrained: true
+        hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+      train:
+        epochs: 20
+        lr: 0.0002
+        sensor_lr_mult: 0.0
+        accum_steps: 2
+        ema: true
+        ema_decay: 0.999
+        distill_weight: 0.08
+        distill_temperature: 2.0
+        distill_confidence_threshold: 0.55
+        checkpoint_average_k: 2
+        log_interval: 25
+        early_stop_patience: 5
+        early_stop_min_delta: 0.001
+      distillation:
+        enabled: true
+        teacher_model:
+          name: segformer_b1
+          pretrained: true
+          hf_model_id: nvidia/segformer-b1-finetuned-cityscapes-1024-1024
+      eval:
+        viz_every: 100
+        tta: false
+        tta_scales: [1.0]
+        tta_flip: false

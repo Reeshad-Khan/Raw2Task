@@ -1,0 +1,63 @@
+task: seg
+
+data:
+  name: kitti360_seg
+  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  img_size: [256, 768]
+  camera: image_00
+  batch_size: 72
+  num_workers: 6
+
+train:
+  epochs: 60
+  depth: 12.0
+  lr: 1.5e-3
+  weight_decay: 1.0e-4
+  sensor_lr_mult: 1.0
+  ckpt_dir: ./checkpoints/wide_model
+  log_interval: 100
+  resume: true
+  resume_path: ""
+  load_strict: true
+  keep_last_n: 3
+  amp: true
+  accum_steps: 1
+  use_lovasz: true
+  ohem_pct: 0.30
+  smooth_lambda: 0.10
+  smooth_sigma_rgb: 0.10
+  smooth_sigma_xy: 1.0
+
+lens:
+  path: /home/rk010/Desktop/Research/NurIPS/DeepLens/lenses/cellphone/cellphone80deg.json
+  spp: 1
+  render_scale: 0.75
+  no_grad: true
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+
+sensor:
+  cfa_init: bayer_rggb
+  sensor_pitch: 2.0e-6
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+
+eval:
+  viz_every: 25
+  train_viz_steps: [1, 10, 50]
+  include_stages_in_viz: true
+  use_crf: true
+  crf_iters: 5
+  crf_sxy: 3
+  crf_srgb: 5
+  crf_compat: 3
+
+debug:
+  dump_stats: false
+
+model:
+  width: 64         # wider
+  num_classes: 19
+  ignore_index: 255

@@ -1,0 +1,577 @@
+base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+out_root: ./runs/sensor_stress_matrix
+seeds:
+- 0
+- 1
+- 2
+experiments:
+- name: stress_lowlight_codesign_segformer_b0
+  overrides:
+    data: &id001
+      img_size:
+      - 320
+      - 960
+      batch_size: 2
+      max_train_samples: 32000
+      max_val_samples: 4000
+      train_stride: 1
+      val_stride: 2
+      photometric_jitter: 0.2
+      rare_oversample_factor: 3.0
+    pipeline: &id002
+      input: sensor
+    sensor: &id005
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 4
+      iso_base: 100
+      iso: 400
+      iso_scale: 1000
+      exposure_init: -2.94443898
+      bit_depth: 6
+      read_noise_std: 2.0
+      shot_noise_scale: 0.55
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 8.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.5
+      min_bit_depth: 4
+      max_bit_depth: 8
+      learn_cfa: true
+      learn_exposure: true
+      learn_noise: true
+      learn_bit_depth: true
+      regularization:
+        cfa_collapse: 0.02
+        exposure_prior: 0.02
+        read_noise_prior: 0.02
+        shot_noise_prior: 0.02
+        bit_depth_prior: 0.04
+    lens:
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.2
+        min_sigma_px: 0.35
+        max_sigma_px: 4.25
+        max_shift_px: 1.5
+        field_sigma: 0.7
+    model: &id003
+      name: segformer_b0
+      pretrained: true
+      hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.25
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: &id004
+      viz_every: 150
+      tta: false
+      tta_scales:
+      - 1.0
+      tta_flip: false
+- name: stress_lowlight_robust_codesign_segformer_b0
+  overrides:
+    data:
+      img_size:
+      - 320
+      - 960
+      batch_size: 2
+      max_train_samples: 32000
+      max_val_samples: 4000
+      train_stride: 1
+      val_stride: 2
+      photometric_jitter: 0.2
+      rare_oversample_factor: 3.0
+    pipeline:
+      input: sensor
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 4
+      iso_base: 100
+      iso: 400
+      iso_scale: 1000
+      exposure_init: -2.94443898
+      bit_depth: 6
+      read_noise_std: 2.0
+      shot_noise_scale: 0.55
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 8.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.5
+      min_bit_depth: 4
+      max_bit_depth: 8
+      learn_cfa: true
+      learn_exposure: true
+      learn_noise: true
+      learn_bit_depth: true
+      regularization:
+        cfa_collapse: 0.02
+        exposure_prior: 0.02
+        read_noise_prior: 0.02
+        shot_noise_prior: 0.02
+        bit_depth_prior: 0.04
+      tolerance:
+        enabled: true
+        optics_coeff_std: 0.035
+        exposure_logit_std: 0.08
+        cfa_logit_std: 0.04
+        read_noise_rel_std: 0.2
+        shot_noise_rel_std: 0.2
+        bit_depth_std: 0.15
+    lens:
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.2
+        min_sigma_px: 0.35
+        max_sigma_px: 4.25
+        max_shift_px: 1.5
+        field_sigma: 0.7
+    model:
+      name: segformer_b0
+      pretrained: true
+      hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.25
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+      tolerance_consistency_weight: 0.06
+      tolerance_task_weight: 0.15
+    eval:
+      viz_every: 150
+      tta: false
+      tta_scales:
+      - 1.0
+      tta_flip: false
+- name: stress_lowlight_fixed_camera_segformer_b0
+  overrides:
+    data: *id001
+    pipeline: *id002
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 4
+      iso_base: 100
+      iso: 400
+      iso_scale: 1000
+      exposure_init: -2.94443898
+      bit_depth: 6
+      read_noise_std: 2.0
+      shot_noise_scale: 0.55
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 8.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.5
+      min_bit_depth: 4
+      max_bit_depth: 8
+      learn_cfa: false
+      learn_exposure: false
+      learn_noise: false
+      learn_bit_depth: false
+    lens:
+      learn_optics: false
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.2
+        min_sigma_px: 0.35
+        max_sigma_px: 4.25
+        max_shift_px: 1.5
+        field_sigma: 0.7
+    model: *id003
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.0
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: *id004
+- name: stress_lowlight_optics_only_segformer_b0
+  overrides:
+    data: *id001
+    pipeline: *id002
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 4
+      iso_base: 100
+      iso: 400
+      iso_scale: 1000
+      exposure_init: -2.94443898
+      bit_depth: 6
+      read_noise_std: 2.0
+      shot_noise_scale: 0.55
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 8.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.5
+      min_bit_depth: 4
+      max_bit_depth: 8
+      learn_cfa: false
+      learn_exposure: false
+      learn_noise: false
+      learn_bit_depth: false
+    lens:
+      learn_optics: true
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.2
+        min_sigma_px: 0.35
+        max_sigma_px: 4.25
+        max_shift_px: 1.5
+        field_sigma: 0.7
+    model: *id003
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.2
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: *id004
+- name: stress_lowlight_sensor_only_segformer_b0
+  overrides:
+    data: *id001
+    pipeline: *id002
+    sensor: *id005
+    lens:
+      learn_optics: false
+    model: *id003
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.25
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: *id004
+- name: stress_lowbit4_codesign_segformer_b0
+  overrides:
+    data: &id006
+      img_size:
+      - 320
+      - 960
+      batch_size: 2
+      max_train_samples: 32000
+      max_val_samples: 4000
+      train_stride: 1
+      val_stride: 2
+      photometric_jitter: 0.15
+      rare_oversample_factor: 3.0
+    pipeline: &id007
+      input: sensor
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 1
+      iso_base: 100
+      iso: 200
+      iso_scale: 1000
+      exposure_init: -1.38629436
+      bit_depth: 4
+      read_noise_std: 1.0
+      shot_noise_scale: 0.35
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 6.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.2
+      min_bit_depth: 4
+      max_bit_depth: 6
+      learn_cfa: true
+      learn_exposure: true
+      learn_noise: true
+      learn_bit_depth: true
+      regularization:
+        cfa_collapse: 0.02
+        exposure_prior: 0.05
+        read_noise_prior: 0.03
+        shot_noise_prior: 0.03
+        bit_depth_prior: 0.08
+    lens:
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.05
+        min_sigma_px: 0.35
+        max_sigma_px: 4.0
+        max_shift_px: 1.25
+        field_sigma: 0.65
+    model: &id008
+      name: segformer_b0
+      pretrained: true
+      hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.25
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: &id009
+      viz_every: 150
+      tta: false
+      tta_scales:
+      - 1.0
+      tta_flip: false
+- name: stress_lowbit4_robust_codesign_segformer_b0
+  overrides:
+    data:
+      img_size:
+      - 320
+      - 960
+      batch_size: 2
+      max_train_samples: 32000
+      max_val_samples: 4000
+      train_stride: 1
+      val_stride: 2
+      photometric_jitter: 0.15
+      rare_oversample_factor: 3.0
+    pipeline:
+      input: sensor
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 1
+      iso_base: 100
+      iso: 200
+      iso_scale: 1000
+      exposure_init: -1.38629436
+      bit_depth: 4
+      read_noise_std: 1.0
+      shot_noise_scale: 0.35
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 6.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.2
+      min_bit_depth: 4
+      max_bit_depth: 6
+      learn_cfa: true
+      learn_exposure: true
+      learn_noise: true
+      learn_bit_depth: true
+      regularization:
+        cfa_collapse: 0.02
+        exposure_prior: 0.05
+        read_noise_prior: 0.03
+        shot_noise_prior: 0.03
+        bit_depth_prior: 0.08
+      tolerance:
+        enabled: true
+        optics_coeff_std: 0.035
+        exposure_logit_std: 0.08
+        cfa_logit_std: 0.04
+        read_noise_rel_std: 0.2
+        shot_noise_rel_std: 0.2
+        bit_depth_std: 0.15
+    lens:
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.05
+        min_sigma_px: 0.35
+        max_sigma_px: 4.0
+        max_shift_px: 1.25
+        field_sigma: 0.65
+    model:
+      name: segformer_b0
+      pretrained: true
+      hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.25
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+      tolerance_consistency_weight: 0.06
+      tolerance_task_weight: 0.15
+    eval:
+      viz_every: 150
+      tta: false
+      tta_scales:
+      - 1.0
+      tta_flip: false
+- name: stress_lowbit4_fixed_camera_segformer_b0
+  overrides:
+    data: *id006
+    pipeline: *id007
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 1
+      iso_base: 100
+      iso: 200
+      iso_scale: 1000
+      exposure_init: -1.38629436
+      bit_depth: 4
+      read_noise_std: 1.0
+      shot_noise_scale: 0.35
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 6.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.2
+      min_bit_depth: 4
+      max_bit_depth: 6
+      learn_cfa: false
+      learn_exposure: false
+      learn_noise: false
+      learn_bit_depth: false
+    lens:
+      learn_optics: false
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.05
+        min_sigma_px: 0.35
+        max_sigma_px: 4.0
+        max_shift_px: 1.25
+        field_sigma: 0.65
+    model: *id008
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.0
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: *id009
+- name: stress_lowbit4_optics_only_segformer_b0
+  overrides:
+    data: *id006
+    pipeline: *id007
+    sensor:
+      raw_output: rggbi
+      demosaic_kernel_size: 5
+      sensor_model: deeplens_nbit
+      black_level: 1
+      iso_base: 100
+      iso: 200
+      iso_scale: 1000
+      exposure_init: -1.38629436
+      bit_depth: 4
+      read_noise_std: 1.0
+      shot_noise_scale: 0.35
+      min_read_noise_std: 1.0e-05
+      max_read_noise_std: 6.0
+      min_shot_noise_scale: 1.0e-05
+      max_shot_noise_scale: 1.2
+      min_bit_depth: 4
+      max_bit_depth: 6
+      learn_cfa: false
+      learn_exposure: false
+      learn_noise: false
+      learn_bit_depth: false
+    lens:
+      learn_optics: true
+      trainable_psf:
+        num_zones: 5
+        kernel_size: 17
+        base_sigma_px: 1.05
+        min_sigma_px: 0.35
+        max_sigma_px: 4.0
+        max_shift_px: 1.25
+        field_sigma: 0.65
+    model: *id008
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.2
+      sensor_reg_weight: 0.0005
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval: *id009
+- name: stress_clean_rgb_reference_segformer_b0
+  overrides:
+    data:
+      img_size:
+      - 320
+      - 960
+      batch_size: 2
+      max_train_samples: 32000
+      max_val_samples: 4000
+      train_stride: 1
+      val_stride: 2
+      rare_oversample_factor: 3.0
+    pipeline:
+      input: rgb
+    model:
+      name: segformer_b0
+      pretrained: true
+      hf_model_id: nvidia/segformer-b0-finetuned-cityscapes-1024-1024
+    train:
+      epochs: 60
+      lr: 0.00016
+      sensor_lr_mult: 0.0
+      accum_steps: 4
+      ema: true
+      ema_decay: 0.999
+      checkpoint_average_k: 3
+      log_interval: 50
+      early_stop_patience: 10
+      early_stop_min_delta: 0.0007
+    eval:
+      viz_every: 150
+      tta: false
+      tta_scales:
+      - 1.0
+      tta_flip: false
