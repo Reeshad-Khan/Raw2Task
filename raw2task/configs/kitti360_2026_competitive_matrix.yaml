@@ -1,4 +1,4 @@
-base_config: deeplens/projects/raw2task/configs/kitti360_review_base.yaml
+base_config: raw2task/configs/kitti360_review_base.yaml
 out_root: ./runs/kitti360_2026_competitive
 seeds: [0, 1, 2]
 
