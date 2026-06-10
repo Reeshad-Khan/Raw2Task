@@ -2,7 +2,7 @@
 
 The research project contains several optional stacks (reconstruction networks,
 surrogate models, differentiable optics, and task-driven sensing).  Importing
-``deeplens.projects.raw2task`` should not require every optional dependency used
+``raw2task`` should not require every optional dependency used
 by unrelated modules, so package-level imports are intentionally best-effort.
 """
 
