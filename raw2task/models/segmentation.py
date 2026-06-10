@@ -537,8 +537,16 @@ def build_segmentation_model(cfg: Dict[str, Any], in_channels: int, num_classes:
         mcfg.setdefault("hf_model_id", "nvidia/segformer-b1-finetuned-cityscapes-1024-1024")
         return _hf_segformer(mcfg, num_classes=num_classes, in_channels=in_channels)
     if name in ("segformer_b2",):
-        # default HF model id for SegFormer-B2 finetuned on Cityscapes
         mcfg.setdefault("hf_model_id", "nvidia/segformer-b2-finetuned-cityscapes-1024-1024")
+        return _hf_segformer(mcfg, num_classes=num_classes, in_channels=in_channels)
+    if name in ("segformer_b3",):
+        mcfg.setdefault("hf_model_id", "nvidia/segformer-b3-finetuned-cityscapes-1024-1024")
+        return _hf_segformer(mcfg, num_classes=num_classes, in_channels=in_channels)
+    if name in ("segformer_b4",):
+        mcfg.setdefault("hf_model_id", "nvidia/segformer-b4-finetuned-cityscapes-1024-1024")
+        return _hf_segformer(mcfg, num_classes=num_classes, in_channels=in_channels)
+    if name in ("segformer_b5",):
+        mcfg.setdefault("hf_model_id", "nvidia/segformer-b5-finetuned-cityscapes-1024-1024")
         return _hf_segformer(mcfg, num_classes=num_classes, in_channels=in_channels)
     if name.startswith("lraspp_efficientnet"):
         # allow names like lraspp_efficientnet_b0 or lraspp_efficientnet_b1
@@ -557,5 +565,6 @@ def build_segmentation_model(cfg: Dict[str, Any], in_channels: int, num_classes:
     raise ValueError(
         f"Unknown segmentation model {name!r}. Available: unet_tiny, liteseg, "
         "liteseg_aspp, ddrnet_lite, bisenet_lite, lraspp_mobilenet_v3_large, deeplabv3_mobilenet_v3_large, "
-        "deeplabv3_resnet50, fcn_resnet50, segformer, hf_auto."
+        "deeplabv3_resnet50, fcn_resnet50, segformer, segformer_b1, segformer_b2, segformer_b3, "
+        "segformer_b4, segformer_b5, hf_auto."
     )
