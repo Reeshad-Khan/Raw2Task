@@ -131,7 +131,7 @@ exps         = matrix_exps(MATRIX_FILE)
 running_jobs = squeue_jobs()
 now          = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-print(f"\n  Raw2Task · SegFormer-B2 ({len(exps)} exps)   [{now}]\n")
+print(f"\n  Raw2Task · Mask2Former-Swin-L ({len(exps)} exps)   [{now}]\n")
 print(f"  {'Experiment':<44} {'Status':<10} {'Epoch':>8}  {'BestmIoU':>9}  {'BestAcc':>8}  {'T':>2}  {'Loss':>7}  {'batchmIoU':>10}  {'ETA'}")
 print("  " + "─" * 115)
 
