@@ -56,7 +56,7 @@ def job_for_exp(exp):
 
 def last_live_line(job_id):
     """Return the most recent step-log line from .err, or progress from .out."""
-    for ext, pattern in [("err", r"Epoch \d+"), ("out", r"TRAIN epoch")]:
+    for ext, pattern in [("err", r"Epoch \d+ \| \d+/\d+"), ("out", r"TRAIN epoch")]:
         path = f"{LOGS_DIR}/r2t_{job_id}.{ext}"
         if not os.path.exists(path):
             continue
