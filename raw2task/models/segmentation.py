@@ -356,6 +356,7 @@ def _hf_segformer(cfg: Dict[str, Any], num_classes: int, in_channels: int) -> nn
                 ignore_mismatched_sizes=True,
                 use_safetensors=True,
                 local_files_only=True,
+                low_cpu_mem_usage=False,
             )
         else:
             try:
@@ -365,6 +366,7 @@ def _hf_segformer(cfg: Dict[str, Any], num_classes: int, in_channels: int) -> nn
                     ignore_mismatched_sizes=True,
                     use_safetensors=True,
                     local_files_only=bool(cfg.get("local_files_only", False)),
+                    low_cpu_mem_usage=False,
                 )
             except Exception:
                 model = AutoModelForSemanticSegmentation.from_pretrained(
@@ -372,6 +374,7 @@ def _hf_segformer(cfg: Dict[str, Any], num_classes: int, in_channels: int) -> nn
                     num_labels=num_classes,
                     ignore_mismatched_sizes=True,
                     local_files_only=bool(cfg.get("local_files_only", False)),
+                    low_cpu_mem_usage=False,
                 )
     else:
         try:
@@ -411,6 +414,7 @@ def _hf_auto_segmentation(cfg: Dict[str, Any], num_classes: int, in_channels: in
                 ignore_mismatched_sizes=True,
                 use_safetensors=True,
                 local_files_only=True,
+                low_cpu_mem_usage=False,
             )
         else:
             try:
@@ -420,6 +424,7 @@ def _hf_auto_segmentation(cfg: Dict[str, Any], num_classes: int, in_channels: in
                     ignore_mismatched_sizes=True,
                     use_safetensors=True,
                     local_files_only=bool(cfg.get("local_files_only", False)),
+                    low_cpu_mem_usage=False,
                 )
             except Exception:
                 model = AutoModelForSemanticSegmentation.from_pretrained(
@@ -427,6 +432,7 @@ def _hf_auto_segmentation(cfg: Dict[str, Any], num_classes: int, in_channels: in
                     num_labels=num_classes,
                     ignore_mismatched_sizes=True,
                     local_files_only=bool(cfg.get("local_files_only", False)),
+                    low_cpu_mem_usage=False,
                 )
     else:
         hf_cfg = AutoConfig.from_pretrained(
