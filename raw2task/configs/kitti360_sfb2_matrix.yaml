@@ -1,0 +1,14 @@
+base_config: raw2task/configs/kitti360_sfb2_base.yaml
+out_root: ./runs/kitti360_sfb2
+seeds: [0]    # single seed first — verify it works before committing 3 seeds
+
+experiments:
+  - name: codesign_sfb2
+    overrides: {}
+
+  - name: rgb_sfb2
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0   # no sensor to train in RGB mode
