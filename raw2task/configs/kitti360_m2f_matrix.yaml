@@ -1,0 +1,32 @@
+base_config: raw2task/configs/kitti360_m2f_base.yaml
+out_root: ./runs/kitti360_m2f
+seeds: [0]    # single seed for initial validation
+
+experiments:
+  - name: codesign_m2f
+    overrides: {}
+
+  - name: rgb_m2f
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: ablate_fixed_camera_m2f
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_no_optics_m2f
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""

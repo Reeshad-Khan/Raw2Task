@@ -3,9 +3,9 @@
 import os, glob, csv, re, subprocess
 from datetime import datetime
 
-RUNS_DIR    = os.path.expanduser("~/Raw2Task/runs/kitti360_sfb2")
+RUNS_DIR    = os.path.expanduser("~/Raw2Task/runs/kitti360_m2f")
 LOGS_DIR    = os.path.expanduser("~/Raw2Task/runs/logs")
-MATRIX_FILE = os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb2_matrix.yaml")
+MATRIX_FILE = os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_m2f_matrix.yaml")
 USER        = os.environ.get("USER", "re141872")
 
 # ── helpers ───────────────────────────────────────────────────────────────────
