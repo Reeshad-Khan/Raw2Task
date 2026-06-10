@@ -9,7 +9,7 @@ data:
   name: kitti360_seg
   # IMPORTANT: set this to your KITTI-360 exported segmentation root
 
-  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  root_seg: /home/re141872/Research/data/kitti360
   img_size: [192, 640]
   camera: image_00
   batch_size: 8
@@ -30,7 +30,7 @@ sensor:
 
 lens:
   # This file EXISTS in your repo (you showed it under lenses/cellphone/)
-  path: /home/rk010/Desktop/Research/NurIPS/DeepLens/lenses/cellphone/cellphone80deg.json
+  path: /home/re141872/Raw2Task/lenses/cellphone/cellphone80deg.json
   spp: 1
   render_scale: 0.75
   no_grad: true

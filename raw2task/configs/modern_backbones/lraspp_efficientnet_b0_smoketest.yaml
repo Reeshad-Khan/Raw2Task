@@ -4,7 +4,7 @@ seed: 42
 
 data:
   name: kitti360_seg
-  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  root_seg: /home/re141872/Research/data/kitti360
   img_size: [192, 640]
   camera: image_00
   label_encoding: original_id

@@ -4,7 +4,7 @@ task: occupancy_proxy
 
 data:
   name: kitti360_occupancy_proxy
-  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  root_seg: /home/re141872/Research/data/kitti360
   img_size: [256, 768]
   photometric_jitter: 0.15
   camera: image_00

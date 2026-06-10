@@ -6,7 +6,7 @@ pipeline:
   input: sensor
 
 data_2d:
-  root_seg: /home/rk010/Desktop/Research/NurIPS/KITTI-360
+  root_seg: /home/re141872/Research/data/kitti360
   img_size: [256, 768]
   camera: image_00
   label_encoding: original_id
