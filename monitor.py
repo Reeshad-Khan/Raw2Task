@@ -3,9 +3,9 @@
 import os, glob, csv, re, subprocess
 from datetime import datetime
 
-RUNS_DIR    = os.path.expanduser("~/Raw2Task/runs/kitti360_m2f")
+RUNS_DIR    = os.path.expanduser("~/Raw2Task/runs/kitti360_sfb5")
 LOGS_DIR    = os.path.expanduser("~/Raw2Task/runs/logs")
-MATRIX_FILE = os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_m2f_matrix.yaml")
+MATRIX_FILE = os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb5_matrix.yaml")
 USER        = os.environ.get("USER", "re141872")
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ exps         = matrix_exps(MATRIX_FILE)
 running_jobs = squeue_jobs()
 now          = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-print(f"\n  Raw2Task · Mask2Former-Swin-L ({len(exps)} exps)   [{now}]\n")
+print(f"\n  Raw2Task · SegFormer-B5 ({len(exps)} exps)   [{now}]\n")
 print(f"  {'Experiment':<44} {'Status':<10} {'Epoch':>8}  {'BestmIoU':>9}  {'BestAcc':>8}  {'T':>2}  {'Loss':>7}  {'batchmIoU':>10}  {'ETA'}")
 print("  " + "─" * 115)
 
