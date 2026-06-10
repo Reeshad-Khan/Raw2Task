@@ -1,0 +1,32 @@
+base_config: raw2task/configs/kitti360_sfb4_base.yaml
+out_root: ./runs/kitti360_sfb4
+seeds: [0]
+
+experiments:
+  - name: codesign_sfb4
+    overrides: {}
+
+  - name: rgb_sfb4
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: ablate_fixed_camera_sfb4
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_no_optics_sfb4
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""

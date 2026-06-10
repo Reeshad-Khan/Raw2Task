@@ -1,0 +1,162 @@
+name: kitti360_sfb4_base
+seed: 0
+task: seg
+
+data:
+  name: kitti360_seg
+  root_seg: /home/re141872/Research/data/kitti360
+  img_size: [368, 1232]       # close to native KITTI-360 resolution (1242x375)
+  photometric_jitter: 0.15
+  camera: image_00
+  label_encoding: original_id
+  batch_size: 2               # SegFormer-B4; batch=2 + accum=4 → effective batch 8
+  num_workers: 4
+  train_stride: 4             # ~14.6k samples/epoch — manageable on H100
+  val_stride: 1
+  rare_class_ids: [5, 6, 7, 11, 12, 14, 15, 16, 17, 18]
+  rare_oversample_factor: 3.0
+
+pipeline:
+  input: sensor
+
+model:
+  name: segformer_b4
+  pretrained: true
+  hf_model_id: "nvidia/segformer-b4-finetuned-cityscapes-1024-1024"
+  num_classes: 19
+  ignore_index: 255
+
+sensor:
+  raw_output: soft_rgb        # differentiable demosaiced 3ch RGB; gradients flow through PSF+CFA+noise
+  cfa_init: bayer_rggb
+  exposure_init: -1.38629436
+  learn_cfa: true
+  learn_exposure: true
+  sensor_pitch: 1.6e-6
+  bit_depth: 8
+  read_noise_std: 0.003
+  shot_noise_scale: 0.02
+  learn_noise: true
+  learn_bit_depth: true
+  min_read_noise_std: 0.00001
+  max_read_noise_std: 0.05
+  min_shot_noise_scale: 0.00001
+  max_shot_noise_scale: 0.12
+  min_bit_depth: 4
+  max_bit_depth: 12
+  regularization:
+    cfa_collapse: 0.05
+    exposure_prior: 0.10
+    read_noise_prior: 0.05
+    shot_noise_prior: 0.05
+    bit_depth_prior: 0.02
+
+lens:
+  mode: trainable_psf
+  path: ""
+  learn_optics: true
+  spp: 1
+  render_scale: 1.0
+  no_grad: false
+  use_amp: true
+  normalize_output: true
+  target_mean: 0.5
+  trainable_psf:
+    num_zones: 5
+    kernel_size: 15
+    base_sigma_px: 1.05
+    min_sigma_px: 0.35
+    max_sigma_px: 3.75
+    max_shift_px: 1.25
+    field_sigma: 0.65
+    init_field_aberration: true
+    regularization:
+      psf_second_moment: 1.0
+      field_smoothness: 0.25
+      chromatic_smoothness: 0.10
+      coma_shift: 0.25
+      kernel_tv: 0.02
+
+train:
+  epochs: 40
+  depth: 10.0
+  lr: 0.00006             # SegFormer-B4 fine-tuning LR
+  weight_decay: 0.05
+  sensor_lr_mult: 10.0    # sensor/adapter learn from scratch — needs higher LR
+  ckpt_dir: ./runs/kitti360_sfb4_base
+  log_interval: 20
+  resume: false
+  keep_last_n: 2
+  amp: true
+  accum_steps: 4          # effective batch = 8
+  channels_last: false
+  torch_compile: false
+  lr_plateau_patience: 4
+  lr_reduce_factor: 0.5
+  lr_plateau_cooldown: 1
+  min_lr: 0.0000005
+  checkpoint_average_k: 3
+  checkpoint_average_source: best
+  checkpoint_average_use_ema: true
+  ce_weight: 0.6
+  overlap_weight: 0.4
+  overlap_loss: lovasz
+  use_lovasz: true
+  ohem_pct: 0.25
+  smooth_lambda: 0.05
+  smooth_sigma_rgb: 0.10
+  distill_weight: 0.0
+  distill_temperature: 2.0
+  distill_confidence_threshold: 0.55
+  task_feedback_weight: 0.15
+  task_feedback_entropy_weight: 0.60
+  task_feedback_error_weight: 1.00
+  task_feedback_boundary_weight: 1.25
+  task_feedback_rare_weight: 1.50
+  task_feedback_detach: true
+  task_feedback_controller: true
+  task_feedback_controller_ema: 0.70
+  task_feedback_iou_gamma: 1.50
+  task_feedback_min_pressure: 0.75
+  task_feedback_max_pressure: 2.50
+  task_feedback_min_support: 1000
+  sensor_reg_weight: 0.001
+  export_design_every: 1
+  grad_clip_norm: 1.0
+  early_stop_patience: 8
+  early_stop_min_delta: 0.001
+
+loss:
+  class_weight_batches: 500
+  class_weight_min: 0.05
+  class_weight_max: 25.0
+  rare_class_boost:
+    5: 1.5
+    6: 3.0
+    7: 2.0
+    11: 2.0
+    12: 2.5
+    14: 1.8
+    15: 2.0
+    16: 3.0
+    17: 3.0
+    18: 3.0
+
+debug:
+  bypass_optics: false
+  bypass_cfa: false
+  bypass_noise: false
+  dump_stats: false
+
+eval:
+  viz_every: 200
+  train_viz_steps: [1]
+  include_stages_in_viz: true
+  use_crf: false
+
+distillation:
+  enabled: false
+  teacher_model:
+    name: segformer_b4
+    pretrained: true
+    hf_model_id: nvidia/segformer-b4-finetuned-cityscapes-1024-1024
