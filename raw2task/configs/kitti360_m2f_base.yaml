@@ -22,7 +22,7 @@ pipeline:
 model:
   name: mask2former
   pretrained: true
-  hf_model_id: "facebook/mask2former-swin-large-IN21k-384-bs16-160k-cityscapes"
+  hf_model_id: "facebook/mask2former-swin-large-cityscapes-semantic"
   num_classes: 19
   ignore_index: 255
 
@@ -160,4 +160,4 @@ distillation:
   teacher_model:
     name: mask2former
     pretrained: true
-    hf_model_id: facebook/mask2former-swin-large-IN21k-384-bs16-160k-cityscapes
+    hf_model_id: facebook/mask2former-swin-large-cityscapes-semantic
