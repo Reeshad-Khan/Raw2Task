@@ -9,6 +9,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=gpu80
+#SBATCH --exclude=evc[22,26,28-29,31,34,38-39,42,43,46,50]
 
 source /apps/anaconda/anaconda-2024.10/etc/profile.d/conda.sh
 conda activate deeplens
