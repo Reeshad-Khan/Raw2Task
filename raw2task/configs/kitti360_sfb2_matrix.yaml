@@ -11,4 +11,27 @@ experiments:
       pipeline:
         input: rgb
       train:
-        sensor_lr_mult: 0.0   # no sensor to train in RGB mode
+        sensor_lr_mult: 0.0
+
+  - name: ablate_fixed_camera_frontend_sfb2
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_no_optics_sfb2
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
+  - name: ablate_fixed_optics_sfb2
+    overrides:
+      lens:
+        learn_optics: false
