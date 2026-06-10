@@ -10,15 +10,18 @@ USER     = os.environ.get("USER", "re141872")
 def squeue_jobs():
     try:
         out = subprocess.check_output(
-            ["squeue", "-u", USER, "--format=%i %T %M", "--noheader"], text=True
+            ["squeue", "-u", USER, "--noheader", "-o", "%i %T %M"],
+            text=True, stderr=subprocess.DEVNULL
         )
         jobs = {}
         for line in out.strip().splitlines():
             parts = line.split()
-            if len(parts) >= 3:
-                jobs[parts[0]] = {"state": parts[1], "time": parts[2]}
+            if len(parts) >= 1:
+                jobs[parts[0]] = {"state": parts[1] if len(parts) > 1 else "?",
+                                  "time":  parts[2] if len(parts) > 2 else "?"}
         return jobs
     except Exception:
+        # fallback: treat any log file modified in last 10 min as running
         return {}
 
 def job_for_exp(exp, log_dir):
@@ -35,16 +38,20 @@ def job_for_exp(exp, log_dir):
     return None
 
 def last_train_line(job_id, log_dir):
-    path = f"{log_dir}/r2t_{job_id}.out"
-    if not os.path.exists(path):
-        return ""
-    try:
-        out = subprocess.check_output(["tail", "-80", path], text=True)
-        for line in reversed(out.splitlines()):
-            if "TRAIN epoch" in line:
-                return line
-    except Exception:
-        pass
+    # Step-by-step logs go to .err; epoch summaries go to .out
+    for ext in ("err", "out"):
+        path = f"{log_dir}/r2t_{job_id}.{ext}"
+        if not os.path.exists(path):
+            continue
+        try:
+            out = subprocess.check_output(["tail", "-100", path], text=True)
+            for line in reversed(out.splitlines()):
+                if "Epoch" in line and "/3663" in line:   # step log in .err
+                    return line
+                if "TRAIN epoch" in line:                  # progress bar in .out
+                    return line
+        except Exception:
+            pass
     return ""
 
 def parse_train(line):
@@ -89,6 +96,14 @@ def best_metrics(seed_dir):
     except Exception:
         return None
 
+VALID_EXP = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]*$')   # no paths, flags, etc.
+
+def is_recent(path, minutes=15):
+    try:
+        return (datetime.now().timestamp() - os.path.getmtime(path)) < minutes * 60
+    except Exception:
+        return False
+
 # ── gather data ──────────────────────────────────────────────────────────────
 running_jobs = squeue_jobs()
 
@@ -98,12 +113,13 @@ for d in glob.glob(f"{RUNS_DIR}/*_seed*"):
     exps.add(os.path.basename(d).rsplit("_seed", 1)[0])
 
 # also pick up experiments that only exist in logs (no completed epochs yet)
-for f in glob.glob(f"{LOGS_DIR}/r2t_*.out"):
+# only scan recent log files to avoid stale/cancelled runs polluting the list
+for f in sorted(glob.glob(f"{LOGS_DIR}/r2t_*.out"), reverse=True)[:30]:
     try:
         with open(f) as fh:
             for line in fh:
                 m = re.search(r"Experiment: (\S+)", line)
-                if m:
+                if m and VALID_EXP.match(m.group(1)):
                     exps.add(m.group(1))
                     break
     except Exception:
@@ -122,8 +138,10 @@ for exp in sorted(exps):
     metrics   = [m for m in metrics if m]
 
     job_id   = job_for_exp(exp, LOGS_DIR)
-    is_run   = job_id in running_jobs if job_id else False
-    job_info = running_jobs.get(job_id, {})
+    in_squeue = job_id in running_jobs if job_id else False
+    # fallback: log file modified in last 15 min means job is likely running
+    log_active = job_id and is_recent(f"{LOGS_DIR}/r2t_{job_id}.err")
+    is_run = in_squeue or log_active
 
     if is_run:
         status = "RUNNING"
@@ -132,9 +150,9 @@ for exp in sorted(exps):
     else:
         status = "PENDING"
 
-    # live step info
+    # live step info — always try to get latest even if squeue is stale
     live_loss = live_eta = live_epoch = ""
-    if is_run:
+    if job_id:
         tline = last_train_line(job_id, LOGS_DIR)
         p = parse_train(tline)
         if p:
