@@ -5,6 +5,7 @@ deeplens.egg-info/
 0_test.py
 *.png
 *.sh
+!submit_experiments.sh
 results/
 deeplens/do_code/
 !lenses/*.png
