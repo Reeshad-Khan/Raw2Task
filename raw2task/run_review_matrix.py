@@ -189,12 +189,30 @@ def run_matrix(
                 _deep_update(cfg, overrides)
                 ckpt_dir = os.path.join(out_root, f"{exp_name}_seed{seed}")
                 _deep_set(cfg, "train.ckpt_dir", ckpt_dir)
-                _deep_set(cfg, "train.resume", False)
                 os.makedirs(ckpt_dir, exist_ok=True)
 
+                last_pt = os.path.join(ckpt_dir, "last.pt")
+                has_ckpt = os.path.isfile(last_pt)
+                _deep_set(cfg, "train.resume", has_ckpt)
+
+                # count completed epochs from metrics_log.csv
+                metrics_csv = os.path.join(ckpt_dir, "metrics_log.csv")
+                completed_epochs = 0
+                if os.path.isfile(metrics_csv):
+                    try:
+                        with open(metrics_csv) as _f:
+                            completed_epochs = max(0, sum(1 for _ in _f) - 1)  # minus header
+                    except Exception:
+                        pass
+                total_epochs = int(cfg.get("train", {}).get("epochs", 40))
+                training_done = completed_epochs >= total_epochs
+
                 print(f"\n=== Running {exp_name} seed={seed} -> {ckpt_dir} ===")
-                if skip_existing and os.path.isfile(os.path.join(ckpt_dir, "last.pt")):
-                    print("Existing run detected; summarizing without retraining.")
+                if skip_existing and training_done:
+                    print(f"Training complete ({completed_epochs}/{total_epochs} epochs); skipping.")
+                elif has_ckpt:
+                    print(f"Resuming from checkpoint (epoch {completed_epochs} completed).")
+                    train_once(cfg)
                 else:
                     train_once(cfg)
 
