@@ -81,6 +81,8 @@ train:
   epochs: 40
   depth: 10.0
   lr: 0.00006             # SegFormer-B4 fine-tuning LR
+  lr_schedule: poly       # polynomial decay — standard for SegFormer fine-tuning
+  poly_power: 0.9
   weight_decay: 0.05
   sensor_lr_mult: 10.0    # sensor/adapter learn from scratch — needs higher LR
   ckpt_dir: ./runs/kitti360_sfb4_base

@@ -3858,16 +3858,28 @@ def train(cfg: Dict[str, Any]):
 
     scaler = _grad_scaler(enabled=use_amp)
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optim,
-        mode="max",
-        factor=float(tcfg.get("lr_reduce_factor", 0.4)),
-        patience=int(tcfg.get("lr_plateau_patience", 3)),
-        threshold=1e-4,
-        threshold_mode="rel",
-        cooldown=int(tcfg.get("lr_plateau_cooldown", 0)),
-        min_lr=float(tcfg.get("min_lr", 3e-6)),
-    )
+    _lr_schedule = str(tcfg.get("lr_schedule", "plateau")).lower()
+    if _lr_schedule == "poly":
+        _total_epochs = int(tcfg.get("epochs", 40))
+        _power        = float(tcfg.get("poly_power", 0.9))
+        _min_lr_ratio = float(tcfg.get("min_lr", 1e-6)) / max(
+            group["lr"] for group in optim.param_groups
+        )
+        def _poly_lambda(ep, _T=_total_epochs, _p=_power, _min=_min_lr_ratio):
+            return max(_min, (1.0 - ep / _T) ** _p)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=_poly_lambda)
+        logging.info(f"[LR] Polynomial decay: power={_power}, total={_total_epochs} epochs, min_lr_ratio={_min_lr_ratio:.2e}")
+    else:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optim,
+            mode="max",
+            factor=float(tcfg.get("lr_reduce_factor", 0.4)),
+            patience=int(tcfg.get("lr_plateau_patience", 3)),
+            threshold=1e-4,
+            threshold_mode="rel",
+            cooldown=int(tcfg.get("lr_plateau_cooldown", 0)),
+            min_lr=float(tcfg.get("min_lr", 3e-6)),
+        )
 
     log_interval = int(tcfg["log_interval"])
     ckpt_dir = tcfg["ckpt_dir"]
@@ -4594,7 +4606,10 @@ def train(cfg: Dict[str, Any]):
             val_score = evaluate_cls(sensor, eval_model, val_loader, device)
             logging.info(f"[Eval] Epoch {epoch} | acc {val_score:.4f}")
 
-        scheduler.step(val_score)
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(val_score)
+        else:
+            scheduler.step()
         lrs = [group["lr"] for group in optim.param_groups]
         lr_by_component = {
             str(group.get("component")): float(group["lr"])
