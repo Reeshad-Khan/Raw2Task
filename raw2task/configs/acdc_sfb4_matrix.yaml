@@ -1,0 +1,32 @@
+base_config: raw2task/configs/acdc_sfb4_base.yaml
+out_root: ./runs/acdc_sfb4
+seeds: [0]
+
+experiments:
+  - name: codesign_acdc
+    overrides: {}
+
+  - name: rgb_acdc
+    overrides:
+      pipeline:
+        input: rgb
+      train:
+        sensor_lr_mult: 0.0
+
+  - name: ablate_fixed_camera_acdc
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_no_optics_acdc
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""

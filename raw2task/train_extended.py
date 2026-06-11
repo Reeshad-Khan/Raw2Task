@@ -3076,6 +3076,23 @@ def get_dataset(cfg: Dict[str, Any]) -> Tuple[DataLoader, DataLoader, int]:
             cfg["occupancy_proxy"] = occupancy_proxy_metadata()
         else:
             num_classes = int(cfg["model"].get("num_classes", 19))
+    elif name == "acdc_seg":
+        from raw2task.data.acdc_seg import ACDCSeg
+        root       = cfg["data"]["root_seg"]
+        img_size   = tuple(cfg["data"].get("img_size", [512, 1024]))
+        conditions = cfg["data"].get("conditions", None)
+        train_stride = int(cfg["data"].get("train_stride", 1))
+        val_stride   = int(cfg["data"].get("val_stride", 1))
+        tr = ACDCSeg(
+            root=root, split="train", img_size=img_size,
+            conditions=conditions, stride=train_stride,
+            photometric_jitter=float(cfg["data"].get("photometric_jitter", 0.15)),
+        )
+        va = ACDCSeg(
+            root=root, split="val", img_size=img_size,
+            conditions=conditions, stride=val_stride,
+        )
+        num_classes = int(cfg["model"].get("num_classes", 19))
     elif name in (
         "seg_jsonl",
         "cityscapes_jsonl",
