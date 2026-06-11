@@ -35,7 +35,7 @@ def squeue_jobs():
     except Exception:
         return {}
 
-def is_recent(path, minutes=5):
+def is_recent(path, minutes=15):
     try:
         return (datetime.now().timestamp() - os.path.getmtime(path)) < minutes * 60
     except Exception:
