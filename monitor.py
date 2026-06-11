@@ -69,6 +69,46 @@ def last_live_line(job_id):
             pass
     return "", ""
 
+
+def compute_eta(job_id, epoch, step, total_steps, total_epochs=40):
+    """Estimate remaining training time from log file timestamps."""
+    path = f"{LOGS_DIR}/r2t_{job_id}.err"
+    try:
+        # get first and last step-log lines from the file
+        all_lines = subprocess.check_output(
+            ["grep", "-E", r"Epoch [0-9]+ \| [0-9]+/[0-9]+", path],
+            text=True, stderr=subprocess.DEVNULL
+        ).splitlines()
+        if len(all_lines) < 2:
+            return ""
+        ts_pat = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+        ep_pat = r'Epoch (\d+) \| (\d+)/(\d+)'
+        t1 = re.search(ts_pat, all_lines[0])
+        t2 = re.search(ts_pat, all_lines[-1])
+        m1 = re.search(ep_pat, all_lines[0])
+        m2 = re.search(ep_pat, all_lines[-1])
+        if not (t1 and t2 and m1 and m2):
+            return ""
+        from datetime import datetime as _dt
+        dt1 = _dt.strptime(t1.group(1), "%Y-%m-%d %H:%M:%S")
+        dt2 = _dt.strptime(t2.group(1), "%Y-%m-%d %H:%M:%S")
+        elapsed = (dt2 - dt1).total_seconds()
+        if elapsed <= 0:
+            return ""
+        ep1, s1, tot = int(m1.group(1)), int(m1.group(2)), int(m1.group(3))
+        ep2, s2      = int(m2.group(1)), int(m2.group(2))
+        done  = (ep2 - ep1) * tot + (s2 - s1)
+        if done <= 0:
+            return ""
+        rate  = done / elapsed          # steps/sec
+        left  = (total_epochs - ep2) * tot + (tot - s2)
+        secs  = left / rate
+        h, rem = divmod(int(secs), 3600)
+        m_     = rem // 60
+        return f"{h}h{m_:02d}m"
+    except Exception:
+        return ""
+
 def parse_line(line, ext):
     """Parse a training progress line from either .err or .out format."""
     info = {}
@@ -158,6 +198,11 @@ for exp in exps:
             if "epoch" in p:
                 pct = f"({p['pct']:4.1f}%)" if "pct" in p else ""
                 live_ep = f"ep{p['epoch']} {pct}"
+                if not live_eta:
+                    live_eta = compute_eta(
+                        job_id, p["epoch"], p.get("step", 0),
+                        p.get("total_steps", 7325)
+                    )
 
     if metrics:
         bm   = max(m["best_miou"] for m in metrics)
