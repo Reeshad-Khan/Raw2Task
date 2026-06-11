@@ -156,9 +156,8 @@ for exp in exps:
             live_bmiou = f"{p['bmiou']:.3f}" if "bmiou" in p else ""
             live_eta   = p.get("eta", "")
             if "epoch" in p:
-                pct = f" {p['pct']:4.1f}%" if "pct" in p else ""
-                tot = p.get("total_epochs", p.get("total_steps", "?"))
-                live_ep = f"{p['epoch']}/{tot}{pct}"
+                pct = f"({p['pct']:4.1f}%)" if "pct" in p else ""
+                live_ep = f"ep{p['epoch']} {pct}"
 
     if metrics:
         bm   = max(m["best_miou"] for m in metrics)
