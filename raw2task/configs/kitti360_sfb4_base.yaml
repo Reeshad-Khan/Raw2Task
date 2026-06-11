@@ -125,7 +125,7 @@ train:
   sensor_reg_weight: 0.001
   export_design_every: 1
   grad_clip_norm: 1.0
-  early_stop_patience: 8
+  early_stop_patience: 40   # effectively disabled — let poly LR run full 40 epochs
   early_stop_min_delta: 0.001
 
 loss:
