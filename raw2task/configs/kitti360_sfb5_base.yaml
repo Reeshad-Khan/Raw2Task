@@ -20,9 +20,9 @@ pipeline:
   input: sensor
 
 model:
-  name: segformer_b5
+  name: segformer_b4
   pretrained: true
-  hf_model_id: "nvidia/segformer-b5-finetuned-cityscapes-1024-1024"
+  hf_model_id: "nvidia/segformer-b4-finetuned-cityscapes-1024-1024"
   num_classes: 19
   ignore_index: 255
 
@@ -158,6 +158,6 @@ eval:
 distillation:
   enabled: false
   teacher_model:
-    name: segformer_b5
+    name: segformer_b4
     pretrained: true
-    hf_model_id: nvidia/segformer-b5-finetuned-cityscapes-1024-1024
+    hf_model_id: nvidia/segformer-b4-finetuned-cityscapes-1024-1024
