@@ -17,6 +17,16 @@ seeds: [0]
 
 experiments:
 
+  # tile=2 CFA+noise baseline (symlinked from v2 — no retraining needed).
+  # Provides the direct tile2 reference point for the tile3/tile4 comparison.
+  - name: ablate_no_optics_sfb4
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
   # Isolates the CFA-only contribution: tile=2, fixed noise, identity PSF.
   # Expected: below no_optics (noise learning absent) but above fixed_camera.
   - name: cfa_only_sfb4

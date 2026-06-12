@@ -12,6 +12,15 @@ seeds: [0]
 
 experiments:
 
+  # tile=2 CFA+noise baseline (symlinked from v2 — no retraining needed).
+  - name: ablate_no_optics_acdc
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+
   - name: cfa_only_acdc
     overrides:
       debug:
