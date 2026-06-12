@@ -73,7 +73,8 @@ def job_for_exp(exp, runs_dir=None):
     # Use grep -lF (fixed-string, list matching files) for fast whole-file scanning.
     # We require both the experiment name and the runs_dir basename to appear in the
     # same log file so v2 and v3 (same exp names, different out_root) don't mix.
-    runs_key = os.path.basename(runs_dir.rstrip("/")) if runs_dir else None
+    # Append "/" so "kitti360_sfb4/" does not match "kitti360_sfb4_v3/..." paths.
+    runs_key = (os.path.basename(runs_dir.rstrip("/")) + "/") if runs_dir else None
     for f in sorted(glob.glob(f"{LOGS_DIR}/r2t_*.out"), reverse=True):
         try:
             r1 = subprocess.run(
