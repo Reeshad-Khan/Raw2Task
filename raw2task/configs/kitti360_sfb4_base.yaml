@@ -84,12 +84,21 @@ train:
   lr_schedule: poly       # polynomial decay — standard for SegFormer fine-tuning
   poly_power: 0.9
   weight_decay: 0.05
-  sensor_lr_mult: 5.0     # halved from 10 — prevents PSF overshoot (ep7 crash in v1 run)
-  sensor_warmup_epochs: 5  # ep1-5: backbone+decoder learn, sensor frozen
-  freeze_backbone_during_sensor_stage: true  # ep6-30: backbone frozen, sensor+decoder jointly optimise
-  sensor_rollback_on_val_drop: true   # roll back PSF if val mIoU drops >0.5% after sensor update
+  sensor_lr_mult: 5.0
+  sensor_warmup_epochs: 5        # ep1-5: sensor frozen, backbone+decoder stabilise first
+  # Task-Driven Lens Design (arXiv 2305.17185): backbone frozen for full first phase so PSF
+  # optimises against a stable gradient signal before joint fine-tuning begins.
+  backbone_freeze_epochs: 24     # ep6-24: backbone frozen, PSF+decoder learn (~60% of 40ep)
+  # Successive Optimization (arXiv 2412.14603): alternate net-only/sensor-only steps in joint phase.
+  alternating_opt_enabled: true
+  alternating_net_steps: 10      # 10 backbone steps then 1 sensor step in joint phase
+  alternating_sensor_steps: 1
+  # PSF proximity regularisation (Tolerance-Aware Deep Optics, arXiv 2502.04719): prevent large
+  # per-epoch PSF jumps that caused the ep7 overshoot in v1.
+  psf_proximity_weight: 0.05
+  sensor_rollback_on_val_drop: true
   sensor_rollback_val_tolerance: 0.005
-  sensor_rollback_shrink: 0.5         # halve optics LR on rollback
+  sensor_rollback_shrink: 0.5
   ckpt_dir: ./runs/kitti360_sfb4_base
   log_interval: 20
   resume: false

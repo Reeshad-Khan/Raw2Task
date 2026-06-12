@@ -3681,10 +3681,19 @@ def train(cfg: Dict[str, Any]):
     fixed_sensor_advantage_apply_to_model = bool(tcfg.get("fixed_sensor_advantage_apply_to_model", False))
     aux_losses_update_adapter = bool(tcfg.get("aux_losses_update_adapter", True))
     freeze_backbone_during_sensor_stage = bool(tcfg.get("freeze_backbone_during_sensor_stage", False))
+    backbone_freeze_epochs = int(tcfg.get("backbone_freeze_epochs", 0))
     sensor_freeze_after_best_patience = int(tcfg.get("sensor_freeze_after_best_patience", 0))
     sensor_freeze_restore_best = bool(tcfg.get("sensor_freeze_restore_best", True))
     sensor_reg_weight = float(tcfg.get("sensor_reg_weight", 0.0))
     sensor_warmup_epochs = int(tcfg.get("sensor_warmup_epochs", 0))
+    # Alternating optimization (Successive Optimization, arXiv 2412.14603):
+    # alternate network-only and sensor-only optimizer steps within the joint phase.
+    alternating_opt_enabled = bool(tcfg.get("alternating_opt_enabled", False))
+    alternating_net_steps = int(tcfg.get("alternating_net_steps", 10))
+    alternating_sensor_steps = int(tcfg.get("alternating_sensor_steps", 1))
+    # PSF proximity regularization (Tolerance-Aware Deep Optics, arXiv 2502.04719):
+    # penalize large PSF deviations from epoch-start snapshot to prevent overshoot.
+    psf_proximity_weight = float(tcfg.get("psf_proximity_weight", 0.0))
     tolerance_consistency_weight = float(tcfg.get("tolerance_consistency_weight", 0.0))
     tolerance_task_weight = float(tcfg.get("tolerance_task_weight", 0.0))
     export_design_every = int(tcfg.get("export_design_every", 1))
@@ -3870,8 +3879,20 @@ def train(cfg: Dict[str, Any]):
             sensor_freeze_after_best_patience,
             sensor_freeze_restore_best,
         )
-    if freeze_backbone_during_sensor_stage and hasattr(model, "backbone_parameters"):
+    if backbone_freeze_epochs > 0 and hasattr(model, "backbone_parameters"):
+        logging.info(
+            "[StageSchedule] backbone_freeze_epochs=%d: backbone frozen ep%d–%d (Task-Driven Lens Design), joint fine-tune after.",
+            backbone_freeze_epochs, sensor_warmup_epochs + 1, backbone_freeze_epochs,
+        )
+    elif freeze_backbone_during_sensor_stage and hasattr(model, "backbone_parameters"):
         logging.info("[StageSchedule] backbone frozen during active sensor co-design stage; task ISP remains trainable.")
+    if alternating_opt_enabled:
+        logging.info(
+            "[AltOpt] alternating optimization enabled: %d net-steps then %d sensor-steps per period (joint phase only).",
+            alternating_net_steps, alternating_sensor_steps,
+        )
+    if psf_proximity_weight > 0.0:
+        logging.info("[PSFProximity] PSF proximity regularization enabled: weight=%.4f", psf_proximity_weight)
 
     scaler = _grad_scaler(enabled=use_amp)
 
@@ -4034,16 +4055,28 @@ def train(cfg: Dict[str, Any]):
                 state = "unfrozen" if sensor_active else "frozen"
                 logging.info(f"[SensorWarmup] sensor parameters are {state} at epoch {epoch}.")
 
-        backbone_frozen_for_stage = (
-            freeze_backbone_during_sensor_stage
-            and hasattr(model, "backbone_parameters")
-            and hasattr(model, "adapter_parameters")
-            and sensor_active
-        )
+        # backbone_freeze_epochs > 0: Task-Driven Lens Design approach — freeze backbone for
+        # the full first phase (sensor_warmup_epochs+1 .. backbone_freeze_epochs), then joint.
+        # backbone_freeze_epochs == 0: fall back to old freeze_backbone_during_sensor_stage
+        # behaviour (backbone frozen for the entire sensor-active stage).
+        if backbone_freeze_epochs > 0:
+            backbone_frozen_for_stage = (
+                hasattr(model, "backbone_parameters")
+                and hasattr(model, "adapter_parameters")
+                and sensor_active
+                and epoch <= backbone_freeze_epochs
+            )
+        else:
+            backbone_frozen_for_stage = (
+                freeze_backbone_during_sensor_stage
+                and hasattr(model, "backbone_parameters")
+                and hasattr(model, "adapter_parameters")
+                and sensor_active
+            )
         if hasattr(model, "backbone_parameters") and hasattr(model, "adapter_parameters"):
             _set_requires_grad(model.adapter_parameters(), True, model_param_requires_grad)
             _set_requires_grad(model.backbone_parameters(), not backbone_frozen_for_stage, model_param_requires_grad)
-            if epoch == start_epoch or epoch == sensor_warmup_epochs + 1 or (sensor_frozen_by_plateau and epoch == last_improve_epoch + sensor_freeze_after_best_patience):
+            if epoch == start_epoch or epoch == sensor_warmup_epochs + 1 or epoch == backbone_freeze_epochs + 1 or (sensor_frozen_by_plateau and epoch == last_improve_epoch + sensor_freeze_after_best_patience):
                 logging.info(
                     "[StageSchedule] epoch=%d sensor_active=%s backbone=%s task_isp=trainable",
                     epoch,
@@ -4061,6 +4094,22 @@ def train(cfg: Dict[str, Any]):
         epoch_deploy_sum = 0.0
         epoch_fixed_advantage_sum = 0.0
         epoch_sensor_reg_sum = 0.0
+        # PSF proximity: snapshot optics params at epoch start (Tolerance-Aware Deep Optics).
+        psf_ref_snapshot: list = []
+        if psf_proximity_weight > 0.0 and sensor_active:
+            _optics_params = sensor_component_params.get("optics", [])
+            psf_ref_snapshot = [p.detach().clone() for p in _optics_params]
+
+        # Whether alternating opt applies this epoch (joint phase: sensor on, backbone not epoch-frozen).
+        _altopt_joint = (
+            alternating_opt_enabled
+            and sensor_active
+            and not backbone_frozen_for_stage
+            and hasattr(model, "backbone_parameters")
+            and hasattr(model, "adapter_parameters")
+        )
+        _altopt_period = alternating_net_steps + alternating_sensor_steps
+
         pbar = tqdm(
             train_loader,
             desc=f"Epoch {epoch}",
@@ -4070,6 +4119,17 @@ def train(cfg: Dict[str, Any]):
             imgs = imgs.to(device); labels = labels.to(device)
             if bool(tcfg.get("channels_last", False)):
                 imgs = imgs.contiguous(memory_format=torch.channels_last)
+
+            # Alternating optimization toggle (Successive Optimization, arXiv 2412.14603).
+            # During joint phase: alternate net-only and sensor-only optimizer steps so neither
+            # component can silently absorb the other's gradient signal.
+            if _altopt_joint:
+                _eff_step = (it - 1) // accum_steps   # optimizer-step index within epoch
+                _sensor_turn = (_eff_step % _altopt_period) >= alternating_net_steps
+                # sensor turn: backbone frozen; network turn: sensor frozen
+                _set_requires_grad(model.backbone_parameters(), not _sensor_turn, model_param_requires_grad)
+                for _p in sensor.parameters():
+                    _p.requires_grad_(sensor_param_requires_grad.get(id(_p), False) and _sensor_turn)
 
             with _amp_context(enabled=use_amp):
                 raw = sensor(imgs)
@@ -4263,6 +4323,16 @@ def train(cfg: Dict[str, Any]):
                         sensor_reg = sensor.regularization().get("total", sensor_reg)
                         sensor_reg_for_log = sensor_reg
                         total_loss = total_loss + sensor_reg_weight * sensor_reg
+                    # PSF proximity: penalise deviation from epoch-start PSF snapshot.
+                    # Prevents large per-step PSF jumps (Tolerance-Aware Deep Optics, arXiv 2502.04719).
+                    if psf_proximity_weight > 0.0 and psf_ref_snapshot and sensor_active:
+                        _optics_now = sensor_component_params.get("optics", [])
+                        if len(_optics_now) == len(psf_ref_snapshot):
+                            _prox_loss = sum(
+                                (p - r.to(p.device)).pow(2).sum()
+                                for p, r in zip(_optics_now, psf_ref_snapshot)
+                            )
+                            total_loss = total_loss + psf_proximity_weight * _prox_loss
                     loss_for_log = total_loss.detach()
                 else:
                     total_loss = loss_fn(logits, labels)
@@ -4325,6 +4395,12 @@ def train(cfg: Dict[str, Any]):
                         class_weight=ce_weight if is_dense_task else None,
                     )
                 optim.zero_grad(set_to_none=True)
+                # Restore epoch-level requires_grad after alternating opt step.
+                if _altopt_joint:
+                    _set_requires_grad(model.adapter_parameters(), True, model_param_requires_grad)
+                    _set_requires_grad(model.backbone_parameters(), True, model_param_requires_grad)
+                    for _p in sensor.parameters():
+                        _p.requires_grad_(sensor_param_requires_grad.get(id(_p), False))
                 if use_ema and ema_model is not None and epoch >= ema_start_epoch:
                     _ema_update(ema_model, model, ema_decay)
 
