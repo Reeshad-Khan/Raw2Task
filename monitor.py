@@ -70,17 +70,25 @@ def is_recent(path, minutes=15):
         return False
 
 def job_for_exp(exp, runs_dir=None):
-    # If runs_dir is given, also require the log to mention that specific output dir
-    # so v2 and v3 experiments (same name, different out_root) don't cross-contaminate.
+    # Use grep -lF (fixed-string, list matching files) for fast whole-file scanning.
+    # We require both the experiment name and the runs_dir basename to appear in the
+    # same log file so v2 and v3 (same exp names, different out_root) don't mix.
     runs_key = os.path.basename(runs_dir.rstrip("/")) if runs_dir else None
     for f in sorted(glob.glob(f"{LOGS_DIR}/r2t_*.out"), reverse=True):
         try:
-            with open(f) as fh:
-                head = fh.read(16384)   # first 16KB covers all startup lines
-            if f"Experiment: {exp}" not in head:
+            r1 = subprocess.run(
+                ["grep", "-qF", f"Experiment: {exp}", f],
+                capture_output=True,
+            )
+            if r1.returncode != 0:
                 continue
-            if runs_key and runs_key not in head:
-                continue
+            if runs_key:
+                r2 = subprocess.run(
+                    ["grep", "-qF", runs_key, f],
+                    capture_output=True,
+                )
+                if r2.returncode != 0:
+                    continue
             m = re.search(r"r2t_(\d+)\.out", f)
             return m.group(1) if m else None
         except Exception:
