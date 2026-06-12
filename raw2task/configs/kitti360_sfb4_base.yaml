@@ -84,7 +84,11 @@ train:
   lr_schedule: poly       # polynomial decay — standard for SegFormer fine-tuning
   poly_power: 0.9
   weight_decay: 0.05
-  sensor_lr_mult: 10.0    # sensor/adapter learn from scratch — needs higher LR
+  sensor_lr_mult: 5.0     # halved from 10 — prevents PSF overshoot (ep7 crash in v1 run)
+  sensor_warmup_epochs: 5  # freeze sensor for first 5 epochs; backbone stabilises before PSF starts moving
+  sensor_rollback_on_val_drop: true   # roll back PSF if val mIoU drops >0.5% after sensor update
+  sensor_rollback_val_tolerance: 0.005
+  sensor_rollback_shrink: 0.5         # halve optics LR on rollback
   ckpt_dir: ./runs/kitti360_sfb4_base
   log_interval: 20
   resume: false
