@@ -5,16 +5,30 @@ from datetime import datetime
 
 DATASETS = [
     {
-        "label":       "KITTI-360",
+        "label":       "KITTI-360 v2",
         "runs_dir":    os.path.expanduser("~/Raw2Task/runs/kitti360_sfb4"),
         "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb4_matrix.yaml"),
         "total_epochs": 40,
         "steps_per_ep": 7325,
     },
     {
-        "label":       "ACDC",
+        "label":       "KITTI-360 v3 (2-stage)",
+        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/kitti360_sfb4_v3"),
+        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb4_v3_matrix.yaml"),
+        "total_epochs": 40,
+        "steps_per_ep": 7325,
+    },
+    {
+        "label":       "ACDC v2",
         "runs_dir":    os.path.expanduser("~/Raw2Task/runs/acdc_sfb4"),
         "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/acdc_sfb4_matrix.yaml"),
+        "total_epochs": 60,
+        "steps_per_ep": 400,
+    },
+    {
+        "label":       "ACDC v3 (2-stage)",
+        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/acdc_sfb4_v3"),
+        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/acdc_sfb4_v3_matrix.yaml"),
         "total_epochs": 60,
         "steps_per_ep": 400,
     },
