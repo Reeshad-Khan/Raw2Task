@@ -32,6 +32,8 @@ import json
 import math
 import os
 
+import matplotlib
+matplotlib.use("Agg")   # non-interactive backend — works on compute nodes without display
 import matplotlib as mpl
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
