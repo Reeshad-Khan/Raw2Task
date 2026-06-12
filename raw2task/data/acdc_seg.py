@@ -83,22 +83,20 @@ class ACDCSeg(Dataset):
         samples: List[Tuple[Path, Path, str]] = []
 
         for cond in self.conditions:
-            if self.use_ref:
-                img_base = self.root / "rgb_anon" / "ref" / cond / self.split
-                gt_base  = self.root / "gt"      / "ref" / cond / self.split
-            else:
-                img_base = self.root / "rgb_anon" / cond / self.split
-                gt_base  = self.root / "gt"       / cond / self.split
+            split_dir = f"{self.split}_ref" if self.use_ref else self.split
+            img_suffix = "_rgb_anon_ref.png" if self.use_ref else "_rgb_anon.png"
 
-            if not img_base.exists():
+            img_base = self.root / "rgb_anon" / cond / split_dir
+            gt_base  = self.root / "gt"       / cond / split_dir
+
+            if not gt_base.exists():
                 continue
 
-            for i, lf in enumerate(sorted(gt_base.rglob("*_labelTrainIds.png"))):
+            for i, lf in enumerate(sorted(gt_base.rglob("*_gt_labelTrainIds.png"))):
                 if i % self.stride != 0:
                     continue
-                # derive image path: replace gt → rgb_anon, remove _gtFine_labelTrainIds suffix
                 rel      = lf.relative_to(gt_base)
-                img_name = rel.name.replace("_gtFine_labelTrainIds.png", "_leftImg8bit.png")
+                img_name = rel.name.replace("_gt_labelTrainIds.png", img_suffix)
                 img_path = img_base / rel.parent / img_name
                 if img_path.exists():
                     samples.append((img_path, lf, cond))
