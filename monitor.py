@@ -5,30 +5,30 @@ from datetime import datetime
 
 DATASETS = [
     {
-        "label":       "KITTI-360 v2",
+        "label":       "KITTI-360 baseline",
         "runs_dir":    os.path.expanduser("~/Raw2Task/runs/kitti360_sfb4"),
         "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb4_matrix.yaml"),
         "total_epochs": 40,
         "steps_per_ep": 7325,
     },
     {
-        "label":       "KITTI-360 v3 (2-stage)",
-        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/kitti360_sfb4_v3"),
-        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb4_v3_matrix.yaml"),
+        "label":       "KITTI-360 spectral (FINAL)",
+        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/kitti360_sfb4_spectral"),
+        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/kitti360_sfb4_spectral_matrix.yaml"),
         "total_epochs": 40,
         "steps_per_ep": 7325,
     },
     {
-        "label":       "ACDC v2",
+        "label":       "ACDC baseline",
         "runs_dir":    os.path.expanduser("~/Raw2Task/runs/acdc_sfb4"),
         "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/acdc_sfb4_matrix.yaml"),
         "total_epochs": 60,
         "steps_per_ep": 400,
     },
     {
-        "label":       "ACDC v3 (2-stage)",
-        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/acdc_sfb4_v3"),
-        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/acdc_sfb4_v3_matrix.yaml"),
+        "label":       "ACDC spectral (FINAL)",
+        "runs_dir":    os.path.expanduser("~/Raw2Task/runs/acdc_sfb4_spectral"),
+        "matrix_file": os.path.expanduser("~/Raw2Task/raw2task/configs/acdc_sfb4_spectral_matrix.yaml"),
         "total_epochs": 60,
         "steps_per_ep": 400,
     },

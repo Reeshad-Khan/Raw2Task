@@ -2406,6 +2406,7 @@ class CoDesignSensor(nn.Module):
             init_floor=float(s.get("cfa_init_floor", 1e-4)),
             temperature=self.cfa_temperature_start,
             min_transmittance=float(s.get("cfa_min_transmittance", 0.0)),
+            tile_size=int(s.get("cfa_tile_size", 2)),
         )
         if not bool(s.get("learn_cfa", True)):
             for p in self.cfa.parameters():
@@ -2725,10 +2726,11 @@ class CoDesignSensor(nn.Module):
         self._log_stats("after_noise", raw)
         stages["after_noise"] = raw.detach()
         if self.raw_output in ("soft_rgb", "demosaic", "demosaiced", "cfa_rgb", "rgb_readout"):
+            _dk = (self.cfg.get("sensor") or {}).get("demosaic_kernel_size")
             raw_out = soft_cfa_demosaic(
                 raw,
                 self.cfa.effective_weights(),
-                kernel_size=int(self.cfg.get("sensor", {}).get("demosaic_kernel_size", 5)),
+                kernel_size=int(_dk) if _dk is not None else None,
             )
             alpha = float(getattr(self, "camera_blend_alpha", 1.0))
             if alpha < 0.999:
