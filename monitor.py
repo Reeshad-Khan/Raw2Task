@@ -69,14 +69,20 @@ def is_recent(path, minutes=15):
     except Exception:
         return False
 
-def job_for_exp(exp):
+def job_for_exp(exp, runs_dir=None):
+    # If runs_dir is given, also require the log to mention that specific output dir
+    # so v2 and v3 experiments (same name, different out_root) don't cross-contaminate.
+    runs_key = os.path.basename(runs_dir.rstrip("/")) if runs_dir else None
     for f in sorted(glob.glob(f"{LOGS_DIR}/r2t_*.out"), reverse=True):
         try:
             with open(f) as fh:
-                for line in fh:
-                    if f"Experiment: {exp}" in line:
-                        m = re.search(r"r2t_(\d+)\.out", f)
-                        return m.group(1) if m else None
+                head = fh.read(16384)   # first 16KB covers all startup lines
+            if f"Experiment: {exp}" not in head:
+                continue
+            if runs_key and runs_key not in head:
+                continue
+            m = re.search(r"r2t_(\d+)\.out", f)
+            return m.group(1) if m else None
         except Exception:
             pass
     return None
@@ -207,7 +213,7 @@ for ds in DATASETS:
         seed_dirs = sorted(glob.glob(f"{runs_dir}/{exp}_seed*"))
         metrics   = [m for m in (best_metrics(d) for d in seed_dirs) if m]
 
-        job_id   = job_for_exp(exp)
+        job_id   = job_for_exp(exp, runs_dir)
         in_sq    = job_id in running_jobs if job_id else False
         log_live = job_id and is_recent(f"{LOGS_DIR}/r2t_{job_id}.err")
         is_run   = in_sq or log_live
