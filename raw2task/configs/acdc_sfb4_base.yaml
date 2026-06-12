@@ -68,7 +68,7 @@ lens:
     field_sigma: 0.65
     init_field_aberration: true
     regularization:
-      psf_second_moment: 1.0
+      psf_second_moment: 0.5
       field_smoothness: 0.25
       chromatic_smoothness: 0.10
       coma_shift: 0.25
@@ -81,7 +81,7 @@ train:
   lr_schedule: poly
   poly_power: 0.9
   weight_decay: 0.05
-  sensor_lr_mult: 10.0
+  sensor_lr_mult: 5.0
   ckpt_dir: ./runs/acdc_sfb4_base
   log_interval: 20
   resume: false
