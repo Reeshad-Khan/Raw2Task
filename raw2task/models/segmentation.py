@@ -311,6 +311,21 @@ class HFSegmentationWrapper(nn.Module):
             logits = F.interpolate(logits, size=out_size, mode="bilinear", align_corners=False)
         return logits
 
+    def backbone_parameters(self):
+        """Transformer encoder — frozen during sensor-only stage."""
+        if hasattr(self.model, "segformer"):
+            return self.model.segformer.parameters()
+        # fallback: freeze everything except the decode head and input adapter
+        decode_ids = {id(p) for p in self.adapter_parameters()}
+        return (p for p in self.model.parameters() if id(p) not in decode_ids)
+
+    def adapter_parameters(self):
+        """Decode head + input channel adapter — always trainable."""
+        params = list(self.adapter.parameters())
+        if hasattr(self.model, "decode_head"):
+            params += list(self.model.decode_head.parameters())
+        return params
+
 
 def _torchvision_seg(name: str, num_classes: int, in_channels: int, pretrained_backbone: bool) -> nn.Module:
     import torchvision.models.segmentation as seg
