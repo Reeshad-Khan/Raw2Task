@@ -2628,6 +2628,101 @@ class CoDesignSensor(nn.Module):
             self.noise.shot_noise_scale = shot_scale_org
             self.noise.bit_depth = bit_depth_org
 
+    # ------------------------------------------------------------------
+    # Physics-correct noise/quant helpers — split around CFA mosaicking.
+    # Noise is per-channel (pre-CFA); quantization is post-CFA.
+    # ------------------------------------------------------------------
+
+    def _precfa_noise_nbit(self, rgb: torch.Tensor, perturb: bool = False) -> torch.Tensor:
+        """Shot + read noise in N-bit space applied per channel *before* CFA.
+
+        Each RGB channel is treated as an independent photodiode with its
+        own Poisson shot noise and Gaussian read noise.  No quantization
+        is performed here — that happens post-CFA in ``_postcfa_quant_nbit``.
+        """
+        rgb = torch.clamp(rgb, 0.0, 1.0)
+        bit_depth = self.noise.bit_depth_value().to(device=rgb.device, dtype=rgb.dtype)
+        levels_total = torch.pow(torch.tensor(2.0, device=rgb.device, dtype=rgb.dtype), bit_depth) - 1.0
+        black = torch.as_tensor(self.black_level, device=rgb.device, dtype=rgb.dtype).clamp(0.0, 2 ** 16 - 1.0)
+        signal_levels = (levels_total - black).clamp_min(1.0)
+        rgb_nbit = rgb * signal_levels + black  # (B, 3, H, W) in N-bit space
+
+        iso = torch.as_tensor(self.iso_value, device=rgb.device, dtype=rgb.dtype)
+        gain = (iso / max(self.iso_base, 1e-6)).clamp_min(1e-6)
+        shot_alpha = self.noise.shot_noise_scale_value().to(device=rgb.device, dtype=rgb.dtype)
+        read_std = self.noise.read_noise_std_value().to(device=rgb.device, dtype=rgb.dtype)
+        if perturb and self.training:
+            read_rel = self._tol_std("read_noise_rel_std", 0.0)
+            shot_rel = self._tol_std("shot_noise_rel_std", 0.0)
+            if read_rel > 0.0:
+                read_std = read_std * torch.exp(torch.randn((), device=rgb.device, dtype=rgb.dtype) * read_rel)
+            if shot_rel > 0.0:
+                shot_alpha = shot_alpha * torch.exp(torch.randn((), device=rgb.device, dtype=rgb.dtype) * shot_rel)
+
+        signal = (rgb_nbit - black).clamp_min(0.0)
+        shot_std = shot_alpha * torch.sqrt(signal + 1e-6)
+        noise_std = torch.sqrt(shot_std.square() * gain + read_std.square() * gain.square())
+        stochastic = bool(self.training or self.eval_stochastic_noise or self.force_stochastic_noise or perturb)
+        noisy_nbit = rgb_nbit + torch.randn_like(rgb_nbit) * noise_std if stochastic else rgb_nbit
+        noisy_nbit = noisy_nbit.clamp(black, levels_total)
+        return ((noisy_nbit - black) / signal_levels).clamp(0.0, 1.0)
+
+    def _postcfa_quant_nbit(self, raw: torch.Tensor, perturb: bool = False) -> torch.Tensor:
+        """ADC quantization only for the N-bit path — noise was applied pre-CFA."""
+        raw = torch.clamp(raw, 0.0, 1.0)
+        bit_depth = self.noise.bit_depth_value().to(device=raw.device, dtype=raw.dtype)
+        if perturb and self.training:
+            bit_std = self._tol_std("bit_depth_std", 0.0)
+            if bit_std > 0.0:
+                bit_depth = (bit_depth + torch.randn((), device=raw.device, dtype=raw.dtype) * bit_std).clamp(
+                    float(self.noise.min_bit_depth), float(self.noise.max_bit_depth)
+                )
+        levels_total = torch.pow(torch.tensor(2.0, device=raw.device, dtype=raw.dtype), bit_depth) - 1.0
+        black = torch.as_tensor(self.black_level, device=raw.device, dtype=raw.dtype).clamp(0.0, 2 ** 16 - 1.0)
+        signal_levels = (levels_total - black).clamp_min(1.0)
+        raw_nbit = (raw * signal_levels + black).clamp(black, levels_total)
+        quant_nbit = self._round_ste(raw_nbit)
+        return ((quant_nbit - black) / signal_levels).clamp(0.0, 1.0)
+
+    def _apply_precfa_noise(self, rgb: torch.Tensor, perturb: bool = False) -> torch.Tensor:
+        """Dispatch pre-CFA per-channel noise to the correct sensor-model path."""
+        if self.sensor_model in ("deeplens", "deeplens_nbit", "unprocess_nbit", "raw_nbit"):
+            return self._precfa_noise_nbit(rgb, perturb=perturb)
+        # Normalized path: temporarily perturb read/shot params if requested.
+        if perturb and self.training:
+            read_std_org = self.noise.read_noise_std
+            shot_scale_org = self.noise.shot_noise_scale
+            try:
+                read_rel = self._tol_std("read_noise_rel_std", 0.0)
+                shot_rel = self._tol_std("shot_noise_rel_std", 0.0)
+                if read_rel > 0.0:
+                    self.noise.read_noise_std = read_std_org * float(torch.exp(torch.randn(()) * read_rel))
+                if shot_rel > 0.0:
+                    self.noise.shot_noise_scale = shot_scale_org * float(torch.exp(torch.randn(()) * shot_rel))
+                stochastic = True
+                return self.noise.forward_noise_only(rgb, stochastic=stochastic)
+            finally:
+                self.noise.read_noise_std = read_std_org
+                self.noise.shot_noise_scale = shot_scale_org
+        stochastic = bool(self.training or self.eval_stochastic_noise or self.force_stochastic_noise)
+        return self.noise.forward_noise_only(rgb, stochastic=stochastic)
+
+    def _apply_postcfa_quant(self, raw: torch.Tensor, perturb: bool = False) -> torch.Tensor:
+        """Dispatch post-CFA ADC quantization to the correct sensor-model path."""
+        if self.sensor_model in ("deeplens", "deeplens_nbit", "unprocess_nbit", "raw_nbit"):
+            return self._postcfa_quant_nbit(raw, perturb=perturb)
+        # Normalized path: temporarily perturb bit_depth if requested.
+        if perturb and self.training:
+            bit_depth_org = float(self.noise.bit_depth_value().detach().cpu())
+            try:
+                bit_std = self._tol_std("bit_depth_std", 0.0)
+                if bit_std > 0.0:
+                    self.noise.bit_depth = bit_depth_org + float(torch.randn(()) * bit_std)
+                return self.noise.forward_quant_only(raw)
+            finally:
+                self.noise.bit_depth = bit_depth_org
+        return self.noise.forward_quant_only(raw)
+
     def forward(self, rgb: torch.Tensor, return_stages: bool = False, perturb: bool = False):
         """
         rgb: (B,3,H,W) in [0,1]
@@ -2709,7 +2804,15 @@ class CoDesignSensor(nn.Module):
         stages["after_exposure"] = rgb.detach()
         stages["exposure_gain"] = exposure.detach()
 
-        # 3) CFA
+        # 3) Pre-CFA per-channel noise — each photodiode accumulates independently.
+        # Shot noise and read noise are applied to the 3-channel scene signal before
+        # the CFA weighted sum so that noise statistics match a real sensor array.
+        if not self.dbg_bypass_noise:
+            rgb = self._apply_precfa_noise(rgb, perturb=perturb)
+        self._log_stats("after_precfa_noise", rgb)
+        stages["after_precfa_noise"] = rgb.detach()
+
+        # 4) CFA mosaic
         if self.dbg_bypass_cfa:
             raw = rgb.mean(dim=1, keepdim=True)
         else:
@@ -2718,13 +2821,10 @@ class CoDesignSensor(nn.Module):
         self._log_stats("after_cfa", raw)
         stages["after_cfa"] = raw.detach()
 
-        # 4) Noise + quant
+        # 5) Post-CFA ADC quantization — the ADC sees the single-channel RAW signal.
         if not self.dbg_bypass_noise:
-            if self.sensor_model in ("deeplens", "deeplens_nbit", "unprocess_nbit", "raw_nbit"):
-                raw = self._noise_quant_deeplens_nbit(raw, perturb=perturb)
-            else:
-                raw = self._noise_quant_normalized(raw, perturb=perturb)
-        self._log_stats("after_noise", raw)
+            raw = self._apply_postcfa_quant(raw, perturb=perturb)
+        self._log_stats("after_noise", raw)   # key name preserved for backward compat
         stages["after_noise"] = raw.detach()
         if self.raw_output in ("soft_rgb", "demosaic", "demosaiced", "cfa_rgb", "rgb_readout"):
             _dk = (self.cfg.get("sensor") or {}).get("demosaic_kernel_size")
@@ -2802,12 +2902,20 @@ class CoDesignSensor(nn.Module):
                 out[f"optics_{name}"] = value
             total = total + optics_reg.get("total", torch.zeros_like(total))
 
+        # Physics-constrained CFA spectral regularization.
+        # peak:      -mean(max channel weight) — rewards spectrally peaked filters.
+        # diversity: mean pairwise cosine similarity — penalises spectral collapse.
+        # smooth:    L2 distance between adjacent tile sites — rewards smooth patterns.
+        # entropy:   Shannon entropy — alternative peak constraint (not used by default).
+        cfa_spec = self.cfa.spectral_regularization_loss()
+        cfa_peak      = cfa_spec["peak"]       # negative value; minimising makes filters more peaked
+        cfa_diversity = cfa_spec["diversity"]  # positive value; minimising pushes filters apart
+        cfa_smooth    = cfa_spec["smooth"]     # positive value; minimising smooths tile transitions
         w = self.cfa.effective_weights()
         cfa_entropy = -(w * torch.log(w.clamp_min(1e-8))).sum(dim=-1).mean()
-        w_norm = F.normalize(w, dim=-1)
-        sim = w_norm @ w_norm.t()
-        offdiag = sim[~torch.eye(sim.shape[0], dtype=torch.bool, device=sim.device)]
-        cfa_collapse = offdiag.mean() if offdiag.numel() else w.new_tensor(0.0)
+        # cfa_collapse kept for backward compat with existing configs
+        cfa_collapse = cfa_diversity
+
         exposure_prior = torch.log(self.exposure_value().clamp_min(1e-6)).square()
         noise = self.noise
         read_prior = torch.log(noise.read_noise_std_value().clamp_min(1e-8) / max(float(self.cfg["sensor"].get("read_noise_std", 0.005)), 1e-8)).square()
@@ -2815,14 +2923,22 @@ class CoDesignSensor(nn.Module):
         bit_prior = (noise.bit_depth_value() - float(self.cfg["sensor"].get("bit_depth", 8))).square() / 64.0
 
         reg_weights = (self.cfg.get("sensor", {}) or {}).get("regularization", {}) or {}
-        out["cfa_entropy"] = cfa_entropy
-        out["cfa_collapse"] = cfa_collapse
+        out["cfa_peak"]     = cfa_peak
+        out["cfa_diversity"] = cfa_diversity
+        out["cfa_smooth"]   = cfa_smooth
+        out["cfa_entropy"]  = cfa_entropy
+        out["cfa_collapse"] = cfa_collapse   # alias for cfa_diversity
         out["exposure_prior"] = exposure_prior
         out["read_noise_prior"] = read_prior
         out["shot_noise_prior"] = shot_prior
         out["bit_depth_prior"] = bit_prior
-        total = total + float(reg_weights.get("cfa_entropy", 0.0)) * cfa_entropy
-        total = total + float(reg_weights.get("cfa_collapse", 0.05)) * cfa_collapse
+        # Defaults: peak=0.05 encourages real-filter-like responses without being too aggressive.
+        # diversity=0.05 keeps filters spectrally separated.  smooth=0.01 is a light nudge.
+        total = total + float(reg_weights.get("cfa_peak",      0.05)) * cfa_peak
+        total = total + float(reg_weights.get("cfa_diversity", 0.05)) * cfa_diversity
+        total = total + float(reg_weights.get("cfa_smooth",    0.01)) * cfa_smooth
+        total = total + float(reg_weights.get("cfa_entropy",   0.0))  * cfa_entropy
+        total = total + float(reg_weights.get("cfa_collapse",  0.0))  * cfa_collapse   # off by default (duplicate)
         total = total + float(reg_weights.get("exposure_prior", 0.10)) * exposure_prior
         total = total + float(reg_weights.get("read_noise_prior", 0.05)) * read_prior
         total = total + float(reg_weights.get("shot_noise_prior", 0.05)) * shot_prior

@@ -93,23 +93,40 @@ class PoissonGaussianNoiseQuant(nn.Module):
         )
 
     def forward(self, x, stochastic: bool | None = None):  # x in [0,1]
+        x = self.forward_noise_only(x, stochastic=stochastic)
+        return self.forward_quant_only(x)
+
+    def forward_noise_only(self, x: torch.Tensor, stochastic: bool | None = None) -> torch.Tensor:
+        """Apply shot + read noise without ADC quantization.
+
+        Accepts any shape tensor with values in [0, 1].  Used to apply
+        per-channel noise to the 3-channel scene image *before* CFA
+        mosaicking so that each photodiode sees independent noise — the
+        physically correct order.
+        """
         x = torch.clamp(x, 0.0, 1.0)
         if stochastic is None:
             stochastic = bool(self.training)
+        if not stochastic:
+            return x
         shot_scale = self.shot_noise_scale_value().to(device=x.device, dtype=x.dtype)
         read_std = self.read_noise_std_value().to(device=x.device, dtype=x.dtype)
+        shot_std = torch.sqrt(torch.clamp(shot_scale * x, min=1e-6))
+        noisy = x + torch.randn_like(x) * shot_std + torch.randn_like(x) * read_std
+        return torch.clamp(noisy, 0.0, 1.0)
+
+    def forward_quant_only(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ADC quantization without noise (straight-through estimator).
+
+        Used after CFA mosaicking — the ADC sees a single-channel RAW
+        signal and quantises it to the learned bit depth.
+        """
+        x = torch.clamp(x, 0.0, 1.0)
         bit_depth = self.bit_depth_value().to(device=x.device, dtype=x.dtype)
-        if stochastic:
-            shot_std = torch.sqrt(torch.clamp(shot_scale * x, min=1e-6))
-            noisy = x + torch.randn_like(x) * shot_std + torch.randn_like(x) * read_std
-        else:
-            noisy = x
-        noisy = torch.clamp(noisy, 0.0, 1.0)
         levels = torch.pow(torch.tensor(2.0, device=x.device, dtype=x.dtype), bit_depth) - 1.0
-        y = noisy * levels
-        y_rounded = torch.round(y)
-        y = y + (y_rounded - y).detach()   # straight-through estimator
-        return y / levels
+        y = x * levels
+        y = y + (torch.round(y) - y).detach()   # straight-through estimator
+        return torch.clamp(y / levels, 0.0, 1.0)
 
     def export_design(self):
         return {

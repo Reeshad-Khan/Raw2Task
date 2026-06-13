@@ -106,6 +106,63 @@ class LearnableCFA(nn.Module):
             weights = weights / weights.sum(dim=-1, keepdim=True).clamp_min(1e-6)
         return weights
 
+    def spectral_regularization_loss(self) -> dict:
+        """Physics-inspired constraints on CFA spectral responses.
+
+        Returns a dict with scalar tensors (add weighted sum to task loss):
+
+        ``peak``
+            Encourages each filter to have one dominant spectral channel
+            (like a real colour filter).  Minimising this pushes each
+            n_sites weight vector toward a one-hot pattern, matching the
+            physics of narrow-band colour filters.  Computed as the
+            mean negative maximum weight across sites — the optimiser
+            minimises total loss, so a positive coefficient on ``peak``
+            rewards higher max-channel weights.
+
+        ``diversity``
+            Encourages different CFA sites to cover different spectral
+            regions.  Computed as the mean off-diagonal cosine similarity
+            between filter pairs — minimising it pushes filters apart in
+            spectral space so the mosaic captures more information.
+
+        ``smooth``
+            For tile_size > 2, penalises abrupt spectral changes between
+            spatially adjacent sites in the tile.  Real filter arrays have
+            spatially smooth transitions; this keeps the learned pattern
+            physically plausible and avoids degenerate chequerboard
+            patterns.
+        """
+        w = self.effective_weights()          # (n_sites, 3), non-negative, row-sum = 1
+
+        # Peak: reward a high maximum-channel weight per site.
+        # Loss = -mean(max_channel) → minimising pushes max toward 1.0.
+        peak_loss = -w.max(dim=-1).values.mean()
+
+        # Diversity: penalise high pairwise cosine similarity.
+        w_n = F.normalize(w, p=2, dim=-1)    # (n_sites, 3)
+        sim = w_n @ w_n.T                     # (n_sites, n_sites)
+        n = self.n_sites
+        off_diag_mask = ~torch.eye(n, dtype=torch.bool, device=sim.device)
+        off_diag = sim[off_diag_mask]
+        diversity_loss = off_diag.mean() if off_diag.numel() > 0 else w.new_tensor(0.0)
+
+        # Smooth: L2 distance between spectrally adjacent tile sites.
+        # Only applied for tile_size >= 3.  For a 2×2 Bayer tile, R/G/G/B are
+        # maximally different neighbours by design — smooth loss would fight both
+        # peak and diversity objectives and push all filters toward grey mixtures.
+        # For larger tiles (3×3, 4×4) a smooth spatial gradient across filter
+        # positions is physically plausible and stabilises training.
+        T = self.tile_size
+        w_grid = w.view(T, T, 3)             # (T, T, 3)
+        smooth_loss = w.new_tensor(0.0)
+        if T > 2:
+            h_diff = (w_grid[1:, :, :] - w_grid[:-1, :, :]).pow(2).mean()
+            v_diff = (w_grid[:, 1:, :] - w_grid[:, :-1, :]).pow(2).mean()
+            smooth_loss = h_diff + v_diff
+
+        return {"peak": peak_loss, "diversity": diversity_loss, "smooth": smooth_loss}
+
     def forward(self, rgb: torch.Tensor, weights: torch.Tensor | None = None) -> torch.Tensor:
         """Apply the T×T CFA mosaic.
 
