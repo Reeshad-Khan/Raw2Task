@@ -414,33 +414,33 @@ def plot_mosaic_pattern(
 # Fill these in when all jobs finish (from monitor.py).
 RESULTS = {
     "KITTI-360": {
-        "RGB (no sensor)":      0.6396,
+        "RGB":                  0.6396,
         "Fixed camera":         0.6043,
-        "Co-design (PSF+CFA)":  None,      # fill after job finishes
-        "No optics (tile2)":    0.6229,
-        "CFA only (tile2)":     None,      # job 662396
-        "Spectral-3 (Ours)":    None,      # job 662397
-        "Spectral-4 (Ours)":    None,      # job 662398
+        "Co-design (PSF+CFA)":  0.6031,
+        "No optics ★":          0.6229,
+        "CFA only":             None,      # job 662396 — ~10h remaining
+        "Tile-3 (ablation)":    None,      # job 662397
+        "Tile-4 (ablation)":    None,      # job 662398
     },
     "ACDC": {
-        "RGB (no sensor)":      0.7374,
+        "RGB":                  0.7374,
         "Fixed camera":         0.6654,
         "Co-design (PSF+CFA)":  0.6906,
-        "No optics (tile2)":    0.6992,
-        "CFA only (tile2)":     None,      # job 662399
-        "Spectral-3 (Ours)":    None,      # job 662400
-        "Spectral-4 (Ours)":    None,      # job 662401
+        "No optics ★":          0.6992,
+        "CFA only":             0.6898,
+        "Tile-3 (ablation)":    0.6777,
+        "Tile-4 (ablation)":    0.6671,
     },
 }
 
 EXP_COLORS = {
-    "RGB (no sensor)":      "#AAAAAA",
+    "RGB":                  "#AAAAAA",
     "Fixed camera":         "#999999",
     "Co-design (PSF+CFA)":  "#F4CCCC",
-    "No optics (tile2)":    "#BDD7EE",
-    "CFA only (tile2)":     "#93C4E0",
-    "Spectral-3 (Ours)":    "#FF9900",
-    "Spectral-4 (Ours)":    "#E65C00",
+    "No optics ★":          "#2196F3",   # best config — blue highlight
+    "CFA only":             "#93C4E0",
+    "Tile-3 (ablation)":    "#FFB74D",
+    "Tile-4 (ablation)":    "#EF6C00",
 }
 
 
@@ -484,18 +484,14 @@ def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
         ax.set_ylim(0.55, max(v for v in vals if v) * 1.08)
         ax.grid(axis="y", alpha=0.3, linewidth=0.5, zorder=0)
 
-        # Bracket: highlight our methods
-        ours_idx = [i for i, n in enumerate(exp_names) if "Ours" in n]
-        if ours_idx:
-            y_top = ax.get_ylim()[1] * 0.97
+        # Star annotation on the best sensor config
+        best_idx = next((i for i, n in enumerate(exp_names) if "★" in n), None)
+        if best_idx is not None and vals[best_idx] is not None:
             ax.annotate(
-                "", xy=(ours_idx[-1], y_top), xytext=(ours_idx[0], y_top),
-                arrowprops=dict(arrowstyle="<->", color="#E65C00", lw=1.5),
-            )
-            ax.text(
-                np.mean(ours_idx), y_top + 0.002,
-                "Ours", ha="center", va="bottom", fontsize=7,
-                color="#E65C00", fontweight="bold",
+                "Optimal", xy=(best_idx, vals[best_idx]),
+                xytext=(best_idx + 0.6, vals[best_idx] + 0.006),
+                fontsize=6, color="#2196F3", fontweight="bold",
+                arrowprops=dict(arrowstyle="->", color="#2196F3", lw=0.8),
             )
 
     fig.suptitle("mIoU Comparison — Task-Optimal Spectral CFA Design",
@@ -520,9 +516,9 @@ def plot_tile_trend(
     """Line plot showing mIoU vs CFA tile size for KITTI and ACDC."""
     # Replace None with actual numbers once jobs finish
     if kitti_miou is None:
-        kitti_miou = {2: 0.6229, 3: None, 4: None}   # 2 = no_optics v2
+        kitti_miou = {2: 0.6229, 3: None, 4: None}   # tile3/4 pending (jobs 662397-398)
     if acdc_miou is None:
-        acdc_miou  = {2: 0.6992, 3: None, 4: None}
+        acdc_miou  = {2: 0.6992, 3: 0.6777, 4: 0.6671}  # ACDC confirmed
 
     fig, ax = plt.subplots(figsize=(3.2, 2.4))
     sizes = [2, 3, 4]
