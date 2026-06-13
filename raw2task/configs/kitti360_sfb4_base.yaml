@@ -45,7 +45,10 @@ sensor:
   min_bit_depth: 4
   max_bit_depth: 12
   regularization:
-    cfa_collapse: 0.05
+    cfa_peak: 0.05        # encourage peaked (near-monochromatic) filter responses
+    cfa_diversity: 0.05   # encourage filters to cover different spectral regions
+    cfa_smooth: 0.01      # spatial smoothness (only active for tile_size > 2)
+    cfa_collapse: 0.0     # legacy alias for cfa_diversity — keep 0.0 to avoid double-count
     exposure_prior: 0.10
     read_noise_prior: 0.05
     shot_noise_prior: 0.05
