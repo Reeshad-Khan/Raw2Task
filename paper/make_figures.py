@@ -411,25 +411,27 @@ def plot_mosaic_pattern(
 
 # ── Figure 5: mIoU Results Bar Chart ──────────────────────────────────────────
 
-# Fill these in when all jobs finish (from monitor.py).
+# Hardcoded fallback results (overridden by auto_collect_results when run dirs are given).
+# KITTI-360 spectral: jobs 662637-639,661 — done ~Jun 13 18:00
+# ACDC spectral: jobs 662657-660 — DONE Jun 13 12:41 (new physics)
 RESULTS = {
     "KITTI-360": {
-        "RGB":                  0.6396,
-        "Fixed camera":         0.6043,
-        "Co-design (PSF+CFA)":  0.6031,
-        "No optics ★":          0.6229,
-        "CFA only":             None,      # job 662396 — ~10h remaining
-        "Tile-3 (ablation)":    None,      # job 662397
-        "Tile-4 (ablation)":    None,      # job 662398
+        "RGB":                  0.6396,   # runs/kitti360_sfb4/rgb_sfb4_seed0
+        "Fixed camera":         0.6043,   # runs/kitti360_sfb4/ablate_fixed_camera_sfb4_seed0
+        "Co-design (PSF+CFA)":  0.6031,   # runs/kitti360_sfb4/codesign_sfb4_seed0
+        "No optics ★":          None,     # runs/kitti360_sfb4_spectral/ablate_no_optics_sfb4_seed0 — pending
+        "CFA only":             None,     # runs/kitti360_sfb4_spectral/cfa_only_sfb4_seed0 — pending
+        "Tile-3 (ablation)":    None,     # runs/kitti360_sfb4_spectral/cfa_tile3_sfb4_seed0 — pending
+        "Tile-4 (ablation)":    None,     # runs/kitti360_sfb4_spectral/cfa_tile4_sfb4_seed0 — pending
     },
     "ACDC": {
-        "RGB":                  0.7374,
-        "Fixed camera":         0.6654,
-        "Co-design (PSF+CFA)":  0.6906,
-        "No optics ★":          0.6992,
-        "CFA only":             0.6898,
-        "Tile-3 (ablation)":    0.6777,
-        "Tile-4 (ablation)":    0.6671,
+        "RGB":                  0.7374,   # runs/acdc_sfb4/rgb_acdc_seed0
+        "Fixed camera":         0.6654,   # runs/acdc_sfb4/ablate_fixed_camera_acdc_seed0
+        "Co-design (PSF+CFA)":  0.6906,   # runs/acdc_sfb4/codesign_acdc_seed0  (old physics)
+        "No optics ★":          0.6853,   # runs/acdc_sfb4_spectral/ablate_no_optics_acdc_seed0 (new physics)
+        "CFA only":             0.6882,   # runs/acdc_sfb4_spectral/cfa_only_acdc_seed0         (new physics)
+        "Tile-3 (ablation)":    0.6800,   # runs/acdc_sfb4_spectral/cfa_tile3_acdc_seed0        (new physics)
+        "Tile-4 (ablation)":    0.6740,   # runs/acdc_sfb4_spectral/cfa_tile4_acdc_seed0        (new physics)
     },
 }
 
