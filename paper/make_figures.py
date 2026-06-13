@@ -556,22 +556,381 @@ def plot_tile_trend(
     return fig
 
 
+# ── Auto-collect results from checkpoint dirs ──────────────────────────────────
+
+def _collect_best_miou(run_dir: str) -> tuple:
+    """Return (best_mIoU, best_pixel_acc) from metrics_log.csv, or (None, None)."""
+    csv_path = os.path.join(run_dir, "metrics_log.csv")
+    if not os.path.isfile(csv_path):
+        return (None, None)
+    best_miou = None
+    best_acc = None
+    try:
+        import csv as _csv
+        with open(csv_path, newline="") as f:
+            reader = _csv.DictReader(f)
+            for row in reader:
+                try:
+                    m = float(row.get("mIoU") or row.get("miou") or 0)
+                    a = float(row.get("pixel_acc") or row.get("PixAcc") or 0)
+                    if best_miou is None or m > best_miou:
+                        best_miou = m
+                        best_acc = a
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    return (best_miou, best_acc)
+
+
+def _find_seed0(root: str, exp_name: str) -> str | None:
+    """Return the seed0 directory for exp_name under root, or None."""
+    for candidate in [
+        os.path.join(root, f"{exp_name}_seed0"),
+        os.path.join(root, exp_name),
+        os.path.join(root, f"{exp_name}_seed0_s0"),
+    ]:
+        if os.path.isdir(candidate):
+            return candidate
+    return None
+
+
+def auto_collect_results(
+    kitti_spectral_root: str | None = None,
+    kitti_base_root: str | None = None,
+    acdc_spectral_root: str | None = None,
+    acdc_base_root: str | None = None,
+) -> dict:
+    """Read mIoU/PixAcc from checkpoint dirs. Returns results dict for plot_results().
+
+    Experiment name mapping (spectral dirs):
+      ablate_no_optics_{sfb4,acdc}  → "No optics ★"
+      cfa_only_{sfb4,acdc}          → "CFA only"
+      cfa_tile3_{sfb4,acdc}         → "Tile-3 (ablation)"
+      cfa_tile4_{sfb4,acdc}         → "Tile-4 (ablation)"
+
+    Experiment name mapping (base dirs):
+      rgb_{sfb4,acdc}               → "RGB"
+      ablate_fixed_camera_{sfb4,acdc} → "Fixed camera"
+      codesign_{sfb4,acdc}          → "Co-design (PSF+CFA)"
+    """
+    SPEC_MAP = {
+        "ablate_no_optics_sfb4":    "No optics ★",
+        "ablate_no_optics_acdc":    "No optics ★",
+        "cfa_only_sfb4":            "CFA only",
+        "cfa_only_acdc":            "CFA only",
+        "cfa_tile3_sfb4":           "Tile-3 (ablation)",
+        "cfa_tile3_acdc":           "Tile-3 (ablation)",
+        "cfa_tile4_sfb4":           "Tile-4 (ablation)",
+        "cfa_tile4_acdc":           "Tile-4 (ablation)",
+    }
+    BASE_MAP = {
+        "rgb_sfb4":                 "RGB",
+        "rgb_acdc":                 "RGB",
+        "ablate_fixed_camera_sfb4": "Fixed camera",
+        "ablate_fixed_camera_acdc": "Fixed camera",
+        "codesign_sfb4":            "Co-design (PSF+CFA)",
+        "codesign_acdc":            "Co-design (PSF+CFA)",
+    }
+
+    def _read_map(root, mapping, suffix):
+        out = {}
+        if not root:
+            return out
+        for exp_name, label in mapping.items():
+            if suffix not in exp_name:
+                continue
+            d = _find_seed0(root, exp_name)
+            if d:
+                m, a = _collect_best_miou(d)
+                if m is not None:
+                    out[label] = (m, a)
+                    print(f"  [{suffix}] {label}: mIoU={m:.4f}  from {d}")
+                else:
+                    print(f"  [{suffix}] {label}: no metrics yet in {d}")
+            else:
+                print(f"  [{suffix}] {label}: dir not found under {root}")
+        return out
+
+    kitti_spec  = _read_map(kitti_spectral_root, SPEC_MAP, "sfb4")
+    kitti_base  = _read_map(kitti_base_root,     BASE_MAP, "sfb4")
+    acdc_spec   = _read_map(acdc_spectral_root,  SPEC_MAP, "acdc")
+    acdc_base   = _read_map(acdc_base_root,      BASE_MAP, "acdc")
+
+    EXP_ORDER = [
+        "RGB", "Fixed camera", "Co-design (PSF+CFA)",
+        "No optics ★", "CFA only", "Tile-3 (ablation)", "Tile-4 (ablation)",
+    ]
+
+    def _merge(spec, base, fallback):
+        merged = {}
+        for k in EXP_ORDER:
+            v = spec.get(k) or base.get(k)
+            merged[k] = v[0] if v else fallback.get(k)
+        return merged
+
+    results = {
+        "KITTI-360": _merge(kitti_spec, kitti_base, RESULTS["KITTI-360"]),
+        "ACDC":      _merge(acdc_spec,  acdc_base,  RESULTS["ACDC"]),
+    }
+    return results
+
+
+# ── Figure 7: Ablation Decomposition ──────────────────────────────────────────
+
+def plot_ablation_decomposition(results: dict | None = None, save: bool = True) -> plt.Figure:
+    """Stacked-bar decomposition: PSF / CFA / Noise contribution vs fixed-camera baseline.
+
+    Bars per dataset (KITTI, ACDC):
+      ■ CFA gain  = cfa_only   − fixed_camera   (positive)
+      ■ Noise gain= no_optics  − cfa_only        (positive)
+      ■ PSF cost  = codesign   − no_optics       (negative, shown downward)
+      ─ Upper bound = rgb − fixed_camera (total oracle headroom, dotted line)
+    """
+    if results is None:
+        results = RESULTS
+
+    datasets = list(results.keys())
+    fig, ax = plt.subplots(figsize=(4.8, 3.2))
+
+    bar_w = 0.32
+    offsets = np.array([-bar_w / 2, bar_w / 2])
+
+    colors = {
+        "CFA gain":   "#4CAF50",
+        "Noise gain": "#8BC34A",
+        "PSF cost":   "#F44336",
+    }
+
+    xs = np.arange(len(datasets))
+    max_val = 0.0
+
+    for i, (ds, x) in enumerate(zip(datasets, xs)):
+        data = results[ds]
+        fixed   = data.get("Fixed camera")
+        cfa_o   = data.get("CFA only")
+        no_opt  = data.get("No optics ★")
+        codesign= data.get("Co-design (PSF+CFA)")
+        rgb_val = data.get("RGB")
+
+        if any(v is None for v in [fixed, no_opt]):
+            ax.text(x, 0.01, "pending", ha="center", fontsize=7, color="#999")
+            continue
+
+        cfa_gain   = (cfa_o   - fixed)  if cfa_o   is not None else None
+        noise_gain = (no_opt  - (cfa_o  if cfa_o else no_opt)) if cfa_o else None
+        if noise_gain is None:
+            noise_gain = no_opt - fixed
+            cfa_gain   = 0.0
+        psf_cost   = (codesign - no_opt) if codesign is not None else None
+        oracle_gain= (rgb_val - fixed)   if rgb_val  is not None else None
+
+        bottom = 0.0
+        for label, val in [("CFA gain", cfa_gain), ("Noise gain", noise_gain)]:
+            if val is None:
+                continue
+            ax.bar(x, val, bar_w * 1.6, bottom=bottom, color=colors[label],
+                   label=label if i == 0 else "", zorder=3, edgecolor="white", linewidth=0.6)
+            ax.text(x, bottom + val / 2, f"+{val:.3f}",
+                    ha="center", va="center", fontsize=6, color="white", fontweight="bold")
+            bottom += val
+            max_val = max(max_val, bottom)
+
+        if psf_cost is not None:
+            ax.bar(x + bar_w * 0.9, psf_cost, bar_w * 0.7, color=colors["PSF cost"],
+                   label="PSF cost" if i == 0 else "", zorder=3, edgecolor="white", linewidth=0.6)
+            ax.text(x + bar_w * 0.9, psf_cost / 2, f"{psf_cost:.3f}",
+                    ha="center", va="center", fontsize=6, color="white", fontweight="bold")
+
+        if oracle_gain is not None:
+            ax.axhline(oracle_gain, xmin=(x - 0.4) / len(datasets),
+                       xmax=(x + 0.4) / len(datasets),
+                       color="#333", linewidth=1.2, linestyle="--", zorder=4)
+            ax.text(x + 0.45, oracle_gain, f"RGB headroom\n{oracle_gain:.3f}",
+                    fontsize=5.5, color="#333", va="center")
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(datasets, fontsize=9)
+    ax.set_ylabel("mIoU gain over Fixed Camera", fontsize=8)
+    ax.axhline(0, color="#999", linewidth=0.8, zorder=1)
+    ax.set_xlim(-0.6, len(datasets) - 0.4)
+    ax.set_ylim(min(-0.015, 0), max_val * 1.25)
+    ax.grid(axis="y", alpha=0.25, linewidth=0.5, zorder=0)
+
+    handles = [
+        mpatches.Patch(color=colors["CFA gain"],   label="CFA spectral learning"),
+        mpatches.Patch(color=colors["Noise gain"],  label="Noise co-optimisation"),
+        mpatches.Patch(color=colors["PSF cost"],    label="PSF co-design cost"),
+    ]
+    ax.legend(handles=handles, frameon=True, framealpha=0.9, fontsize=7,
+              loc="upper right", ncol=1)
+    ax.set_title("Sensor Dimension Contribution to mIoU\n(vs Fixed-Camera Baseline)",
+                 fontsize=9, fontweight="bold")
+    fig.tight_layout()
+
+    if save:
+        out = os.path.join(OUT_DIR, "fig7_ablation_decomposition.pdf")
+        fig.savefig(out)
+        fig.savefig(out.replace(".pdf", ".png"))
+        print(f"Saved: {out}")
+    return fig
+
+
+# ── LaTeX Table ───────────────────────────────────────────────────────────────
+
+_LATEX_EXP_META = [
+    # (label_key,            psf, cfa, noise, tile, display_name)
+    ("RGB",                  "—", "—", "—",  "—",  r"RGB (no sensor)"),
+    ("Fixed camera",         "✗", "✗", "✗",  "2",  r"Fixed camera"),
+    ("Co-design (PSF+CFA)",  "✓", "✓", "✓",  "2",  r"Co-design (PSF+CFA+noise)"),
+    ("No optics ★",          "✗", "✓", "✓",  "2",  r"No optics \textbf{(Ours ★)}"),
+    ("CFA only",             "✗", "✓", "✗",  "2",  r"CFA only (no noise)"),
+    ("Tile-3 (ablation)",    "✗", "✓", "✓",  "3",  r"Tile-3 ablation"),
+    ("Tile-4 (ablation)",    "✗", "✓", "✓",  "4",  r"Tile-4 ablation"),
+]
+
+
+def generate_latex_table(results: dict | None = None, out_file: str | None = None) -> str:
+    """Return LaTeX tabular for the paper's main results table.
+
+    Columns: Method | PSF | CFA | Noise | Tile | KITTI mIoU | KITTI PixAcc | ACDC mIoU | ACDC PixAcc
+    """
+    if results is None:
+        results = RESULTS
+
+    def _fmt(v):
+        if v is None:
+            return r"\textemdash"
+        return f"{v:.4f}"
+
+    def _bold(s, condition):
+        return r"\textbf{" + s + "}" if condition else s
+
+    kitti = results.get("KITTI-360", {})
+    acdc  = results.get("ACDC", {})
+
+    best_kitti = max((v for v in kitti.values() if v is not None), default=None)
+    best_acdc  = max((v for v in acdc.values()  if v is not None), default=None)
+
+    header = (
+        r"\begin{table}[t]" + "\n"
+        r"\centering" + "\n"
+        r"\caption{Sensor co-design results on KITTI-360 and ACDC (SegFormer-B4). "
+        r"Best \emph{sensor} configuration highlighted in bold.}" + "\n"
+        r"\label{tab:main_results}" + "\n"
+        r"\small" + "\n"
+        r"\begin{tabular}{lccccrrrr}" + "\n"
+        r"\toprule" + "\n"
+        r"Method & PSF & CFA & Noise & Tile "
+        r"& \multicolumn{2}{c}{KITTI-360} & \multicolumn{2}{c}{ACDC} \\" + "\n"
+        r"\cmidrule(lr){6-7}\cmidrule(lr){8-9}" + "\n"
+        r"& & & & & mIoU & PixAcc & mIoU & PixAcc \\" + "\n"
+        r"\midrule" + "\n"
+    )
+
+    rows = []
+    for key, psf, cfa, noise, tile, name in _LATEX_EXP_META:
+        km = kitti.get(key)
+        ka = None
+        am = acdc.get(key)
+        aa = None
+
+        km_s = _bold(_fmt(km), km == best_kitti and km is not None)
+        am_s = _bold(_fmt(am), am == best_acdc  and am is not None)
+        ka_s = _fmt(ka)
+        aa_s = _fmt(aa)
+
+        if key == "RGB":
+            rows.append(r"\midrule")
+
+        row = f"{name} & {psf} & {cfa} & {noise} & {tile} & {km_s} & {ka_s} & {am_s} & {aa_s} \\\\"
+        rows.append(row)
+
+    footer = (
+        r"\midrule" + "\n"
+        r"\multicolumn{9}{l}{\scriptsize ★ Best sensor configuration. "
+        r"PSF: \checkmark=learnable, \texttimes=identity. "
+        r"CFA: \checkmark=learnable spectral weights.}" + "\n"
+        r"\bottomrule" + "\n"
+        r"\end{tabular}" + "\n"
+        r"\end{table}"
+    )
+
+    table = header + "\n".join(rows) + "\n" + footer
+
+    if out_file:
+        os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+        with open(out_file, "w") as f:
+            f.write(table)
+        print(f"Saved LaTeX table: {out_file}")
+
+    return table
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main():
-    ap = argparse.ArgumentParser(description="Generate paper figures.")
-    ap.add_argument("--pipeline", action="store_true")
-    ap.add_argument("--cfa",      action="store_true")
-    ap.add_argument("--bars",     action="store_true")
-    ap.add_argument("--mosaic",   action="store_true")
-    ap.add_argument("--results",  action="store_true")
-    ap.add_argument("--trend",    action="store_true")
-    ap.add_argument("--all",      action="store_true")
-    ap.add_argument("--tile2-dir", default=None, help="Run dir for no_optics (tile2)")
-    ap.add_argument("--tile3-dir", default=None, help="Run dir for cfa_tile3")
-    ap.add_argument("--tile4-dir", default=None, help="Run dir for cfa_tile4")
-    ap.add_argument("--show",     action="store_true", help="Display figures interactively")
+    ap = argparse.ArgumentParser(
+        description="Generate all paper figures for the Raw2Task spectral CFA paper.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # After all jobs done — auto-read results and generate everything:
+  python paper/make_figures.py --all \\
+      --kitti-spectral-dir runs/kitti360_sfb4_spectral \\
+      --kitti-base-dir     runs/kitti360_sfb4 \\
+      --acdc-spectral-dir  runs/acdc_sfb4_spectral \\
+      --acdc-base-dir      runs/acdc_sfb4 \\
+      --tile2-dir  runs/kitti360_sfb4_spectral/ablate_no_optics_sfb4_seed0 \\
+      --tile3-dir  runs/kitti360_sfb4_spectral/cfa_tile3_sfb4_seed0 \\
+      --tile4-dir  runs/kitti360_sfb4_spectral/cfa_tile4_sfb4_seed0
+
+  # Pipeline diagram only (no trained weights needed):
+  python paper/make_figures.py --pipeline
+
+  # LaTeX table only:
+  python paper/make_figures.py --latex \\
+      --kitti-spectral-dir runs/kitti360_sfb4_spectral \\
+      --acdc-spectral-dir  runs/acdc_sfb4_spectral
+""",
+    )
+    # Figure flags
+    ap.add_argument("--pipeline",  action="store_true", help="Fig 1: pipeline diagram")
+    ap.add_argument("--cfa",       action="store_true", help="Fig 2: CFA tile comparison")
+    ap.add_argument("--bars",      action="store_true", help="Fig 3: spectral response bars")
+    ap.add_argument("--mosaic",    action="store_true", help="Fig 4: spatial mosaic pattern")
+    ap.add_argument("--results",   action="store_true", help="Fig 5: mIoU bar chart")
+    ap.add_argument("--trend",     action="store_true", help="Fig 6: tile size vs mIoU trend")
+    ap.add_argument("--ablation",  action="store_true", help="Fig 7: ablation decomposition")
+    ap.add_argument("--latex",     action="store_true", help="Generate LaTeX results table")
+    ap.add_argument("--all",       action="store_true", help="Generate all figures + table")
+    # CFA weight dirs
+    ap.add_argument("--tile2-dir", default=None, help="Run dir for no_optics (tile2) CFA weights")
+    ap.add_argument("--tile3-dir", default=None, help="Run dir for cfa_tile3 CFA weights")
+    ap.add_argument("--tile4-dir", default=None, help="Run dir for cfa_tile4 CFA weights")
+    # Auto-collect result dirs
+    ap.add_argument("--kitti-spectral-dir", default=None,
+                    help="Root of kitti360_sfb4_spectral runs (auto-reads mIoU)")
+    ap.add_argument("--kitti-base-dir",     default=None,
+                    help="Root of kitti360_sfb4 baseline runs")
+    ap.add_argument("--acdc-spectral-dir",  default=None,
+                    help="Root of acdc_sfb4_spectral runs")
+    ap.add_argument("--acdc-base-dir",      default=None,
+                    help="Root of acdc_sfb4 baseline runs")
+    ap.add_argument("--show", action="store_true", help="Display figures interactively")
     args = ap.parse_args()
+
+    # Auto-collect numeric results if any dir is given
+    auto_results = None
+    if any([args.kitti_spectral_dir, args.kitti_base_dir,
+            args.acdc_spectral_dir,  args.acdc_base_dir]):
+        print("\nAuto-collecting results from checkpoint dirs...")
+        auto_results = auto_collect_results(
+            kitti_spectral_root=args.kitti_spectral_dir,
+            kitti_base_root=args.kitti_base_dir,
+            acdc_spectral_root=args.acdc_spectral_dir,
+            acdc_base_root=args.acdc_base_dir,
+        )
 
     def load(d):
         if d is None:
@@ -584,9 +943,26 @@ def main():
             print(f"  Loaded tile{T} weights from {d}  shape={w.shape}")
         return w
 
-    w2 = load(args.tile2_dir)
-    w3 = load(args.tile3_dir)
-    w4 = load(args.tile4_dir)
+    # Auto-discover tile dirs from spectral root if not explicitly given
+    def _auto_tile_dir(explicit, root, *exp_names):
+        if explicit:
+            return explicit
+        if not root:
+            return None
+        for name in exp_names:
+            d = _find_seed0(root, name)
+            if d:
+                return d
+        return None
+
+    w2_dir = _auto_tile_dir(args.tile2_dir, args.kitti_spectral_dir,
+                            "ablate_no_optics_sfb4", "cfa_only_sfb4")
+    w3_dir = _auto_tile_dir(args.tile3_dir, args.kitti_spectral_dir, "cfa_tile3_sfb4")
+    w4_dir = _auto_tile_dir(args.tile4_dir, args.kitti_spectral_dir, "cfa_tile4_sfb4")
+
+    w2 = load(w2_dir)
+    w3 = load(w3_dir)
+    w4 = load(w4_dir)
 
     do_all = args.all
 
@@ -595,25 +971,56 @@ def main():
 
     if args.cfa or do_all:
         if w3 is None and w4 is None:
-            print("[warn] --cfa needs at least one of --tile3-dir / --tile4-dir")
-        plot_cfa_comparison(w2, w3, w4)
+            print("[warn] --cfa: no tile3/tile4 dirs found; skipping CFA comparison")
+        else:
+            plot_cfa_comparison(w2, w3, w4)
 
     if args.bars or do_all:
-        plot_spectral_bars(w2, w3, w4)
+        if w2 is None and w3 is None and w4 is None:
+            print("[warn] --bars: no CFA weight dirs found; skipping")
+        else:
+            plot_spectral_bars(w2, w3, w4)
 
     if args.mosaic or do_all:
-        plot_mosaic_pattern(w2, w3, w4)
+        if w3 is None and w4 is None:
+            print("[warn] --mosaic: no tile3/tile4 dirs found; skipping")
+        else:
+            plot_mosaic_pattern(w2, w3, w4)
 
     if args.results or do_all:
-        plot_results()
+        plot_results(results=auto_results)
 
     if args.trend or do_all:
-        plot_tile_trend()
+        # Pull tile mIoU from auto_results for tile trend
+        kitti_tile = acdc_tile = None
+        if auto_results:
+            kr = auto_results.get("KITTI-360", {})
+            ar = auto_results.get("ACDC", {})
+            kitti_tile = {
+                2: kr.get("No optics ★"),
+                3: kr.get("Tile-3 (ablation)"),
+                4: kr.get("Tile-4 (ablation)"),
+            }
+            acdc_tile = {
+                2: ar.get("No optics ★"),
+                3: ar.get("Tile-3 (ablation)"),
+                4: ar.get("Tile-4 (ablation)"),
+            }
+        plot_tile_trend(kitti_miou=kitti_tile, acdc_miou=acdc_tile)
+
+    if args.ablation or do_all:
+        plot_ablation_decomposition(results=auto_results)
+
+    if args.latex or do_all:
+        out_tex = os.path.join(OUT_DIR, "table_main_results.tex")
+        tbl = generate_latex_table(results=auto_results, out_file=out_tex)
+        print("\n── LaTeX table ──────────────────────────────────────────────────")
+        print(tbl)
 
     if args.show:
         plt.show()
 
-    print(f"\nAll figures saved to: {OUT_DIR}/")
+    print(f"\nAll outputs saved to: {OUT_DIR}/")
 
 
 if __name__ == "__main__":
