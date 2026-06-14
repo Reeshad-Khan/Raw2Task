@@ -16,6 +16,12 @@ set -e
 REPO=~/Raw2Task
 PYTHON=$(which python3)
 
+# Prevent OpenBLAS/OMP from spawning threads (login node process limit)
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
 # ── Run dirs ──────────────────────────────────────────────────────────────────
 KITTI_SPEC="$REPO/runs/kitti360_sfb4_spectral"
 KITTI_BASE="$REPO/runs/kitti360_sfb4"
@@ -46,27 +52,10 @@ $PYTHON paper/make_figures.py --all \
     --latex
 
 echo ""
-echo "── Step 2: Qualitative figures — KITTI-360 ─────────────────────────────"
-$PYTHON paper/generate_qualitative.py \
-    --spectral-dir "$KITTI_SPEC" \
-    --base-dir     "$KITTI_BASE" \
-    --out-dir      "$REPO/paper/figures/qualitative_kitti" \
-    --dataset kitti360 \
-    --n-figures 8 \
-    --max-scan-batches 120
-
-echo ""
-echo "── Step 3: Qualitative figures — ACDC ──────────────────────────────────"
-$PYTHON paper/generate_qualitative.py \
-    --spectral-dir "$ACDC_SPEC" \
-    --base-dir     "$ACDC_BASE" \
-    --out-dir      "$REPO/paper/figures/qualitative_acdc" \
-    --dataset acdc \
-    --n-figures 8 \
-    --max-scan-batches 120
-
-echo ""
 echo "======================================================================"
-echo "DONE — all paper elements saved to paper/figures/"
-ls -la "$REPO/paper/figures/"
+echo "DONE — matplotlib figures + LaTeX table saved to paper/figures/"
+ls "$REPO/paper/figures/"
+echo ""
+echo "Next: submit qualitative job (needs GPU):"
+echo "  sbatch paper/run_qualitative.slurm"
 echo "======================================================================"
