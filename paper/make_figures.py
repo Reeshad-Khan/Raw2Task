@@ -445,6 +445,10 @@ EXP_COLORS = {
     "Tile-4 (ablation)":    "#EF6C00",
 }
 
+def _safe_label(s: str) -> str:
+    """Replace Unicode chars that are missing from common serif fonts."""
+    return s.replace("★", "*")
+
 
 def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
     """Grouped bar chart of mIoU results across all experiments and datasets."""
@@ -481,7 +485,7 @@ def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
 
         ax.set_title(dataset, fontsize=9, fontweight="bold")
         ax.set_xticks(x)
-        ax.set_xticklabels(exp_names, rotation=35, ha="right", fontsize=6.5)
+        ax.set_xticklabels([_safe_label(n) for n in exp_names], rotation=35, ha="right", fontsize=6.5)
         ax.set_ylabel("mIoU", fontsize=8)
         ax.set_ylim(0.55, max(v for v in vals if v) * 1.08)
         ax.grid(axis="y", alpha=0.3, linewidth=0.5, zorder=0)
