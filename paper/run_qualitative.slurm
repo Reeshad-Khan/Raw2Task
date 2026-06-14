@@ -2,7 +2,6 @@
 #SBATCH --job-name=r2t_qual
 #SBATCH --output=runs/logs/r2t_qual_%j.out
 #SBATCH --error=runs/logs/r2t_qual_%j.err
-#SBATCH --constraint=gpu80
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
