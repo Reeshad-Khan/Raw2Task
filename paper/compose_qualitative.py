@@ -60,6 +60,24 @@ STRIP_COL = {      # key → 0-based column index in the strip
 
 VOID_BG = (220, 220, 220)   # light grey for void/unlabelled pixels
 
+# All 6 columns — show every model output step
+ALL_COL_SPECS = [
+    ("Input RGB",        "Input RGB"),
+    ("Ground Truth",     "Ground Truth"),
+    ("Fixed Camera",     "Fixed Camera"),
+    ("No Optics (Best)", "No Optics\n(Ours, T=2)"),
+    ("Tile-3",           "Tile-3×3"),
+    ("Tile-4",           "Tile-4×4"),
+]
+
+# 4-column version for the compact combined figure
+COMPACT_COL_SPECS = [
+    ("Input RGB",        "Input RGB"),
+    ("Ground Truth",     "Ground Truth"),
+    ("Fixed Camera",     "Fixed Camera"),
+    ("No Optics (Best)", "No Optics (Ours)"),
+]
+
 
 # ── Void handling ──────────────────────────────────────────────────────────────
 
@@ -126,7 +144,13 @@ def _load_scene(path: str,
         axis_crop = max(0, int(p.shape[0] * 0.07))
         raw.append(p[axis_crop:, :, :])
 
-    # Blank void using GT column (index 1 in the full strip, maps to col_keys index)
+    # Normalise all panels to the same (H, W) so the void mask broadcasts cleanly.
+    # Slight width differences arise from integer-division rounding across columns.
+    target_h = min(p.shape[0] for p in raw)
+    target_w = min(p.shape[1] for p in raw)
+    raw = [p[:target_h, :target_w, :] for p in raw]
+
+    # Blank void using GT column
     gt_local_idx = col_keys.index("Ground Truth") if "Ground Truth" in col_keys else None
     if gt_local_idx is not None:
         raw = _apply_void(raw, gt_index=gt_local_idx)
@@ -153,13 +177,7 @@ def _pick_strips(strip_dir: str, ranks: list[int] | None,
 
 # ── Figure builder ────────────────────────────────────────────────────────────
 
-COL_SPECS = [
-    ("Input RGB",        "Input RGB"),
-    ("Ground Truth",     "Ground Truth"),
-    ("Fixed Camera",     "Fixed Camera"),
-    ("No Optics (Best)", "No Optics (Ours)"),
-]
-
+COL_SPECS  = ALL_COL_SPECS   # default: all 6 columns
 COL_KEYS   = [k  for k, _ in COL_SPECS]
 COL_LABELS = [lb for _, lb in COL_SPECS]
 
@@ -170,13 +188,16 @@ def _render_grid(
     fig_w: float = 7.2,
     section_bg: str = "#EEF2F8",
     section_fg: str = "#0D2A6E",
+    col_labels: list[str] | None = None,
 ) -> None:
     """Render a multi-dataset grid figure.
 
     datasets: [(dataset_label, [scene_panels, ...]), ...]
               scene_panels = list of np.ndarray per column
+    col_labels: column header strings (defaults to COL_LABELS)
     """
-    n_cols   = len(COL_LABELS)
+    labels   = col_labels if col_labels is not None else COL_LABELS
+    n_cols   = len(labels)
 
     # Compute panel sizes from first available panel
     first_panel = datasets[0][1][0][0]
@@ -216,7 +237,7 @@ def _render_grid(
                             wspace=0.005)
 
     # ── Column headers (row 0) ──────────────────────────────────────────────
-    for j, lbl in enumerate(COL_LABELS):
+    for j, lbl in enumerate(labels):
         ax = fig.add_subplot(gs[0, j])
         ax.text(0.5, 0.15, lbl, ha="center", va="bottom",
                 fontsize=9, fontweight="bold",
@@ -276,17 +297,29 @@ def compose_dataset(strip_dir: str,
                     out_stem: str,
                     dataset_label: str,
                     ranks: list[int] | None = None,
-                    n: int = 3) -> list[list[np.ndarray]]:
-    """Build and save a single-dataset figure; return scene rows for reuse."""
+                    n: int = 8,
+                    col_specs: list[tuple[str, str]] | None = None) -> list[list[np.ndarray]]:
+    """Build and save a single-dataset figure with all model-step columns.
+
+    Defaults to ALL 8 strips and ALL 6 columns (Input, GT, Fixed, No Optics, Tile-3, Tile-4).
+    Returns scene rows for reuse in compose_combined().
+    """
+    if col_specs is None:
+        col_specs = ALL_COL_SPECS
+    col_keys = [k for k, _ in col_specs]
+
     strips = _pick_strips(strip_dir, ranks, n)
     if not strips:
         print(f"[skip] No strips in {strip_dir}")
         return []
 
     title_crop = _estimate_title_crop(strips[0])
-    rows = [_load_scene(p, COL_KEYS, title_crop) for p in strips]
+    rows = [_load_scene(p, col_keys, title_crop) for p in strips]
 
-    _render_grid([(dataset_label, rows)], out_stem, fig_w=6.8)
+    # 6-column figures need more width
+    fig_w = 9.5 if len(col_specs) == 6 else 6.8
+    _render_grid([(dataset_label, rows)], out_stem, fig_w=fig_w,
+                 col_labels=[lb for _, lb in col_specs])
     return rows
 
 
@@ -296,29 +329,35 @@ def compose_combined(acdc_dir: str,
                      acdc_ranks: list[int] | None = None,
                      kitti_ranks: list[int] | None = None,
                      n_acdc: int = 3,
-                     n_kitti: int = 3) -> None:
-    """Single figure: ACDC rows (top) + KITTI rows (bottom)."""
+                     n_kitti: int = 3,
+                     col_specs: list[tuple[str, str]] | None = None) -> None:
+    """Single compact figure: ACDC rows (top) + KITTI rows (bottom), 4 columns."""
+    if col_specs is None:
+        col_specs = COMPACT_COL_SPECS   # 4-col for the main paper figure
+    col_keys   = [k  for k, _ in col_specs]
+    col_labels = [lb for _, lb in col_specs]
+
     datasets = []
 
     if os.path.isdir(acdc_dir):
         strips = _pick_strips(acdc_dir, acdc_ranks, n_acdc)
         if strips:
             tc = _estimate_title_crop(strips[0])
-            rows = [_load_scene(p, COL_KEYS, tc) for p in strips]
+            rows = [_load_scene(p, col_keys, tc) for p in strips]
             datasets.append(("ACDC  (Adverse Conditions: fog · night · rain · snow)", rows))
 
     if os.path.isdir(kitti_dir):
         strips = _pick_strips(kitti_dir, kitti_ranks, n_kitti)
         if strips:
             tc = _estimate_title_crop(strips[0])
-            rows = [_load_scene(p, COL_KEYS, tc) for p in strips]
+            rows = [_load_scene(p, col_keys, tc) for p in strips]
             datasets.append(("KITTI-360  (Normal Conditions)", rows))
 
     if not datasets:
         print("[warn] No data found for combined figure")
         return
 
-    _render_grid(datasets, out_stem, fig_w=7.2)
+    _render_grid(datasets, out_stem, fig_w=7.2, col_labels=col_labels)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -329,18 +368,22 @@ def main():
     acdc_dir  = os.path.join(FIGURES_DIR, "qualitative_acdc")
     kitti_dir = os.path.join(FIGURES_DIR, "qualitative_kitti")
 
-    # Per-dataset supplements
+    # Per-dataset figures — ALL 8 scenes × 6 columns (every model step)
     compose_dataset(acdc_dir,  "qualitative_acdc_paper",
-                    "ACDC (Adverse Conditions)", ranks=[1, 2, 3])
-    compose_dataset(kitti_dir, "qualitative_kitti_paper",
-                    "KITTI-360", ranks=[1, 2, 3])
+                    "ACDC  (Adverse Conditions: fog · night · rain · snow)",
+                    n=8, col_specs=ALL_COL_SPECS)
 
-    # Main paper figure — single combined grid
+    compose_dataset(kitti_dir, "qualitative_kitti_paper",
+                    "KITTI-360  (Normal Conditions)",
+                    n=8, col_specs=ALL_COL_SPECS)
+
+    # Main paper figure — compact 4-col combined (3 ACDC + 3 KITTI)
     compose_combined(acdc_dir, kitti_dir,
                      out_stem="qualitative_combined_paper",
                      acdc_ranks=[1, 2, 3],
                      kitti_ranks=[1, 2, 3],
-                     n_acdc=3, n_kitti=3)
+                     n_acdc=3, n_kitti=3,
+                     col_specs=COMPACT_COL_SPECS)
 
 
 if __name__ == "__main__":
