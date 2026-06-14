@@ -15,6 +15,8 @@ conda activate deeplens
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+export PYTHONPATH=/home/re141872/Raw2Task:$PYTHONPATH
+export PYTHONUNBUFFERED=1
 
 REPO=~/Raw2Task
 KITTI_SPEC="$REPO/runs/kitti360_sfb4_spectral"
