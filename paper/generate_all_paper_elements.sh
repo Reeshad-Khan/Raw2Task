@@ -14,7 +14,7 @@
 set -e
 
 REPO=~/Raw2Task
-PYTHON=/opt/anaconda3/bin/python3.11
+PYTHON=$(which python3)
 
 # ── Run dirs ──────────────────────────────────────────────────────────────────
 KITTI_SPEC="$REPO/runs/kitti360_sfb4_spectral"
