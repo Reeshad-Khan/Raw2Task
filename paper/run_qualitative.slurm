@@ -10,6 +10,7 @@
 
 set -e
 cd ~/Raw2Task
+source /apps/anaconda/anaconda-2024.10/etc/profile.d/conda.sh
 conda activate deeplens
 
 export OMP_NUM_THREADS=1
