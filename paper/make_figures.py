@@ -35,6 +35,7 @@ import os
 import matplotlib
 matplotlib.use("Agg")   # non-interactive backend — works on compute nodes without display
 import matplotlib as mpl
+import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
@@ -202,7 +203,7 @@ def _tile_size(n_sites: int) -> int:
 
 def plot_pipeline(save: bool = True) -> plt.Figure:
     """Architecture diagram — modern flat-colour box style (CVPR 2024 convention)."""
-    fig, ax = plt.subplots(figsize=(7.5, 2.0))
+    fig, ax = plt.subplots(figsize=(8.5, 2.2))
     ax.set_xlim(0, 10.2)
     ax.set_ylim(0, 2.8)
     ax.axis("off")
@@ -285,10 +286,9 @@ def plot_pipeline(save: bool = True) -> plt.Figure:
         mpatches.Patch(facecolor=SKIP_COLOR,     edgecolor="#AAAAAA", label="Identity (bypassed)"),
         mpatches.Patch(facecolor=BACKBONE_COLOR, edgecolor="#AAAAAA", label="Pre-trained backbone"),
     ]
-    leg = ax.legend(handles=legend_patches, loc="upper right", frameon=True,
+    leg = ax.legend(handles=legend_patches, loc="lower right", frameon=True,
                     framealpha=0.95, fontsize=7, ncol=2,
-                    bbox_to_anchor=(1.0, 0.98), borderpad=0.5,
-                    edgecolor="#DDDDDD")
+                    borderpad=0.5, edgecolor="#DDDDDD")
     leg.get_frame().set_linewidth(0.5)
 
     fig.suptitle("Task-Optimal Spectral Mosaic Co-Design Pipeline",
@@ -564,7 +564,7 @@ def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
     n_ds      = len(datasets)
 
     # ── Figure canvas ─────────────────────────────────────────────────────────
-    fig, axes = plt.subplots(1, n_ds, figsize=(3.5 * n_ds, 3.2), sharey=False)
+    fig, axes = plt.subplots(1, n_ds, figsize=(5.2 * n_ds, 3.6), sharey=False)
     if n_ds == 1:
         axes = [axes]
 
@@ -583,7 +583,7 @@ def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
         span  = y_max - y_min
         # Tight y-range: show differences clearly, not absolute scale
         y_lo  = max(0, y_min - span * 0.35)
-        y_hi  = y_max + span * 1.55   # headroom for labels and annotation
+        y_hi  = y_max + span * 1.60   # headroom for labels and annotation
 
         fixed_val = data.get("Fixed camera")
         best_val  = data.get("No optics ★")
@@ -611,33 +611,35 @@ def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
         if fixed_val is not None:
             ax.axhline(fixed_val, color=CB["gray"], linewidth=1.0,
                        linestyle=(0, (4, 2)), alpha=0.8, zorder=2)
-            ax.text(-0.45, fixed_val + span * 0.015,
-                    "fixed camera", fontsize=6.5, color=CB["gray"],
-                    va="bottom", style="italic")
+            ax.text(len(exp_names) - 0.5, fixed_val + span * 0.015,
+                    "fixed cam.", fontsize=6.5, color=CB["gray"],
+                    va="bottom", ha="right", style="italic")
 
-        # ── Gain bracket — fixed → best ───────────────────────────────────────
+        # ── Gain bracket — significance bar above fixed→best ─────────────────
         fixed_idx = exp_names.index("Fixed camera") if "Fixed camera" in exp_names else None
         best_idx  = next((i for i, n in enumerate(exp_names) if "★" in n), None)
         if (fixed_idx is not None and best_idx is not None
                 and fixed_val is not None and best_val is not None):
-            bx = best_idx
             gain = best_val - fixed_val
-            brace_y = best_val + span * 0.22
-            ax.annotate(
-                "", xy=(bx, best_val + span * 0.02),
-                xytext=(bx, brace_y - span * 0.02),
-                arrowprops=dict(arrowstyle="-|>", lw=0.8,
-                                color=CB["dkblue"], mutation_scale=7),
-            )
-            ax.text(bx + 0.3, (best_val + brace_y) / 2,
-                    f"+{gain:.3f}", fontsize=7, color=CB["dkblue"],
-                    fontweight="bold", va="center")
+            # Horizontal bracket above all bars — never overlaps value labels
+            bracket_y = y_max + span * 0.80
+            tip_y     = y_max + span * 0.55
+            for bx in [fixed_idx, best_idx]:
+                ax.plot([bx, bx], [tip_y, bracket_y],
+                        color=CB["dkblue"], lw=0.8, linestyle="--", alpha=0.7)
+            ax.annotate("", xy=(best_idx, bracket_y), xytext=(fixed_idx, bracket_y),
+                        arrowprops=dict(arrowstyle="<->", lw=0.9,
+                                        color=CB["dkblue"], mutation_scale=8))
+            mid = (fixed_idx + best_idx) / 2
+            ax.text(mid, bracket_y + span * 0.10,
+                    f"+{gain:.3f}", fontsize=7.5, color=CB["dkblue"],
+                    fontweight="bold", va="bottom", ha="center")
 
         # ── Axis styling ──────────────────────────────────────────────────────
         ax.set_title(dataset, fontsize=10, fontweight="bold", pad=5)
         ax.set_xticks(range(len(exp_names)))
         short_labels = [EXP_SHORT.get(n, _safe_label(n)) for n in exp_names]
-        ax.set_xticklabels(short_labels, fontsize=7.5,
+        ax.set_xticklabels(short_labels, fontsize=7,
                            ha="center", multialignment="center")
         ax.set_ylabel("mIoU" if dataset == datasets[0] else "", fontsize=9)
         ax.set_ylim(y_lo, y_hi)
@@ -695,7 +697,8 @@ def plot_tile_trend(
     ax.set_xticks(sizes)
     ax.set_xticklabels(["2×2\n(4)", "3×3\n(9)", "4×4\n(16)"], fontsize=8)
     ax.legend(frameon=True, framealpha=0.9, fontsize=8,
-              edgecolor="#DDDDDD", loc="upper right")
+              edgecolor="#DDDDDD", loc="center left",
+              bbox_to_anchor=(0.04, 0.5))
     ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
     ax.set_title("mIoU vs CFA Tile Size", fontsize=10, fontweight="bold", pad=5)
@@ -880,7 +883,7 @@ def plot_ablation_decomposition(results: dict | None = None, save: bool = True) 
         cur_y -= 0.5   # extra gap between component groups
 
     # ── Figure ────────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(5.5, 3.6))
+    fig, ax = plt.subplots(figsize=(6.5, 4.0))
 
     all_vals = [r[2] for r in rows if r[2] is not None]
     x_pad    = max(abs(v) for v in all_vals) * 0.35 if all_vals else 0.01
@@ -939,7 +942,7 @@ def plot_ablation_decomposition(results: dict | None = None, save: bool = True) 
     # ── Axes ──────────────────────────────────────────────────────────────────
     ax.set_yticks(y_ticks)
     ax.set_yticklabels(y_labels, fontsize=8)
-    ax.set_xlim(x_lo, x_hi * 1.65)   # extra right margin for comp labels
+    ax.set_xlim(x_lo, x_hi * 1.80)   # extra right margin for comp labels
     ax.set_ylim(min(y_ticks) - 0.7, max(y_ticks) + 0.8)
     ax.set_xlabel(r"$\Delta$mIoU  (vs Fixed-Camera baseline)", fontsize=9)
     ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7, zorder=0)
@@ -947,14 +950,18 @@ def plot_ablation_decomposition(results: dict | None = None, save: bool = True) 
     ax.spines["left"].set_visible(False)
     ax.tick_params(axis="y", length=0)
 
-    # Dataset legend
+    # Dataset legend — placed in upper-left (negative/hurts zone, away from all data labels)
     legend_handles = [
-        mpatches.Patch(color=DS_COLORS[ds],
-                       label=ds + (" (†cross-physics PSF)" if ds == "ACDC" else ""))
-        for ds in DS_ORDER
+        mlines.Line2D([], [], color=CB["dkblue"], marker="o", linewidth=0,
+                      markersize=7, markeredgecolor="white", markeredgewidth=0.7,
+                      label="KITTI-360"),
+        mlines.Line2D([], [], color=CB["red"], marker="s", linewidth=0,
+                      markersize=7, markeredgecolor="white", markeredgewidth=0.7,
+                      label="ACDC  (†cross-physics PSF)"),
     ]
     ax.legend(handles=legend_handles, fontsize=7.5, frameon=True,
-              framealpha=0.9, loc="lower right", ncol=1, edgecolor="#DDDDDD")
+              framealpha=0.92, loc="upper left", ncol=1, edgecolor="#DDDDDD",
+              handletextpad=0.4, borderpad=0.6)
 
     ax.set_title("Sensor Dimension Contribution to Segmentation mIoU",
                  fontsize=10, fontweight="bold", pad=6)
