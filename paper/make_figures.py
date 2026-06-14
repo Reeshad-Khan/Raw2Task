@@ -42,42 +42,101 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
-# ── publication style ─────────────────────────────────────────────────────────
+# ── Publication style — CVPR/ECCV 2024-2025 conventions ───────────────────────
+# Sans-serif in figures (even if LaTeX body uses serif) is now dominant at
+# top-tier venues. pdf.fonttype=42 embeds fonts (required by many venues).
 
 mpl.rcParams.update({
-    "font.family":        "serif",
-    "font.serif":         ["Times New Roman", "Times", "DejaVu Serif"],
-    "mathtext.fontset":   "stix",
-    "font.size":          9,
-    "axes.titlesize":     9,
-    "axes.labelsize":     8,
-    "xtick.labelsize":    7.5,
-    "ytick.labelsize":    7.5,
-    "legend.fontsize":    7.5,
-    "figure.dpi":         150,
-    "savefig.dpi":        300,
-    "savefig.bbox":       "tight",
-    "savefig.pad_inches": 0.05,
-    "axes.spines.top":    False,
-    "axes.spines.right":  False,
-    "axes.grid":          False,
-    "axes.linewidth":     0.8,
-    "xtick.major.width":  0.8,
-    "ytick.major.width":  0.8,
+    # Font — sans-serif matches most CVPR 2024 papers
+    "font.family":          "sans-serif",
+    "font.sans-serif":      ["Arial", "Helvetica", "DejaVu Sans"],
+    "mathtext.fontset":     "dejavusans",
+    "pdf.fonttype":         42,    # embed fonts in PDF (prevents conference rejection)
+    "ps.fonttype":          42,
+    # Sizes
+    "font.size":            9,
+    "axes.titlesize":       9.5,
+    "axes.labelsize":       8.5,
+    "xtick.labelsize":      8,
+    "ytick.labelsize":      8,
+    "legend.fontsize":      8,
+    "legend.title_fontsize": 8.5,
+    # Output quality
+    "figure.dpi":           150,
+    "savefig.dpi":          300,
+    "savefig.bbox":         "tight",
+    "savefig.pad_inches":   0.04,
+    # Axes — minimal, clean
+    "axes.spines.top":      False,
+    "axes.spines.right":    False,
+    "axes.linewidth":       0.6,
+    "axes.axisbelow":       True,   # gridlines behind data
+    # Ticks
+    "xtick.major.width":    0.6,
+    "ytick.major.width":    0.6,
+    "xtick.major.size":     3,
+    "ytick.major.size":     3,
+    "xtick.direction":      "out",
+    "ytick.direction":      "out",
+    # Lines
+    "lines.linewidth":      1.8,
+    "patch.linewidth":      0.6,
+    # Grid — subtle horizontal lines only (set per-axis below)
+    "axes.grid":            True,
+    "grid.color":           "#E0E0E0",
+    "grid.linewidth":       0.7,
+    "grid.alpha":           1.0,
 })
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "figures")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ── colour palette ─────────────────────────────────────────────────────────────
+# ── Colour palette — Seaborn colorblind (accessible, CVPR-standard) ─────────
+# Source: seaborn.color_palette("colorblind")
+CB = {
+    "blue":   "#0173B2",   # primary — our contribution
+    "orange": "#DE8F05",   # tile-3 ablation
+    "green":  "#029E73",   # positive gains
+    "red":    "#D55E00",   # PSF cost / tile-4
+    "purple": "#CC78BC",
+    "brown":  "#CA9161",
+    "sky":    "#56B4E9",   # lighter blue — CFA only
+    "gray":   "#949494",   # neutral / fixed camera
+    "lgray":  "#CCCCCC",   # light gray — RGB oracle
+    "dkblue": "#01579B",   # dark blue — No optics (best)
+}
 
-FIXED_COLOR   = "#BDD7EE"   # light blue — fixed components
-LEARNED_COLOR = "#FFD966"   # amber — learned components
-SKIP_COLOR    = "#F4CCCC"   # pink — bypassed / identity
-BACKBONE_COLOR= "#D9EAD3"   # green — backbone
-ARROW_COLOR   = "#444444"
+# Pipeline box colours
+FIXED_COLOR    = "#E3F2FD"   # very light blue — fixed component
+LEARNED_COLOR  = "#0173B2"   # seaborn blue — our learned component
+SKIP_COLOR     = "#FFEBEE"   # very light pink — identity (bypassed)
+BACKBONE_COLOR = "#E8F5E9"   # very light green — pretrained backbone
+ARROW_COLOR    = "#333333"
 
-CHANNEL_COLORS = {"R": "#D62728", "G": "#2CA02C", "B": "#1F77B4"}
+# Per-channel colours for spectral bar plots
+CHANNEL_COLORS = {"R": "#E53935", "G": "#43A047", "B": "#1E88E5"}
+
+# Method colours — consistent across all figures
+EXP_COLORS = {
+    "RGB":                 CB["lgray"],  # oracle ceiling
+    "Fixed camera":        CB["gray"],   # baseline to beat
+    "Co-design (PSF+CFA)": "#F4A582",    # full co-design (worse than no-optics)
+    "No optics ★":         CB["dkblue"], # best sensor — primary contribution
+    "CFA only":            CB["sky"],    # CFA without noise co-opt
+    "Tile-3 (ablation)":   CB["orange"],
+    "Tile-4 (ablation)":   CB["red"],
+}
+
+# Display labels for x-tick (shorter, cleaner)
+EXP_SHORT = {
+    "RGB":                 "RGB\noracle",
+    "Fixed camera":        "Fixed\ncamera",
+    "Co-design (PSF+CFA)": "Co-design\n(PSF+CFA)",
+    "No optics ★":         "No optics\n(Ours*)",   # * avoids missing-glyph warning
+    "CFA only":            "CFA only\n(no noise)",
+    "Tile-3 (ablation)":   "Tile-3",
+    "Tile-4 (ablation)":   "Tile-4",
+}
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -142,80 +201,98 @@ def _tile_size(n_sites: int) -> int:
 # ── Figure 1: Pipeline Diagram ─────────────────────────────────────────────────
 
 def plot_pipeline(save: bool = True) -> plt.Figure:
-    """Architecture diagram showing the full RAW-to-task pipeline."""
-    fig, ax = plt.subplots(figsize=(7.2, 2.2))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 3)
+    """Architecture diagram — modern flat-colour box style (CVPR 2024 convention)."""
+    fig, ax = plt.subplots(figsize=(7.5, 2.0))
+    ax.set_xlim(0, 10.2)
+    ax.set_ylim(0, 2.8)
     ax.axis("off")
+    ax.set_facecolor("white")
 
-    def box(cx, cy, w, h, label, sublabel="", color=FIXED_COLOR, fontsize=8):
+    # Text colour: dark on light backgrounds, white on dark
+    def _txt_color(bg_hex: str) -> str:
+        r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        return "white" if lum < 140 else "#222222"
+
+    def box(cx, cy, w, h, label, sublabel="", color=FIXED_COLOR, lw=0.8):
+        tc = _txt_color(color)
+        # Flat rounded rectangle — no heavy shadow
         rect = FancyBboxPatch(
             (cx - w / 2, cy - h / 2), w, h,
-            boxstyle="round,pad=0.08", linewidth=0.8,
-            edgecolor="#666666", facecolor=color, zorder=3,
+            boxstyle="round,pad=0.06",
+            linewidth=lw,
+            edgecolor="#AAAAAA" if color.startswith("#E") else "#888888",
+            facecolor=color,
+            zorder=3,
         )
         ax.add_patch(rect)
-        ax.text(cx, cy + (0.10 if sublabel else 0), label,
-                ha="center", va="center", fontsize=fontsize, fontweight="bold", zorder=4)
+        label_y = cy + (0.10 if sublabel else 0)
+        ax.text(cx, label_y, label,
+                ha="center", va="center", fontsize=8.5,
+                fontweight="bold", color=tc, zorder=4)
         if sublabel:
-            ax.text(cx, cy - 0.22, sublabel, ha="center", va="center",
-                    fontsize=6.5, color="#555555", zorder=4)
+            ax.text(cx, cy - 0.23, sublabel, ha="center", va="center",
+                    fontsize=6.8, color=tc if tc == "white" else "#555555", zorder=4)
 
-    def arrow(x1, x2, y=1.5):
+    def arrow(x1, x2, y=1.4):
         ax.annotate("", xy=(x2, y), xytext=(x1, y),
                     arrowprops=dict(arrowstyle="-|>", color=ARROW_COLOR,
-                                   lw=1.2, mutation_scale=10), zorder=2)
+                                   lw=1.0, mutation_scale=9), zorder=2)
 
-    def badge(cx, cy, text, color):
-        ax.text(cx, cy, text, ha="center", va="center", fontsize=5.5,
-                color="white", fontweight="bold", zorder=5,
-                bbox=dict(boxstyle="round,pad=0.15", facecolor=color,
-                          edgecolor="none", alpha=0.9))
+    def chip(cx, cy, text, facecolor, edgecolor):
+        ax.text(cx, cy, text, ha="center", va="center", fontsize=6.5,
+                fontweight="bold", color=_txt_color(facecolor), zorder=5,
+                bbox=dict(boxstyle="round,pad=0.20", facecolor=facecolor,
+                          edgecolor=edgecolor, linewidth=0.6))
 
-    # Boxes — left to right
-    box(0.7,  1.5, 1.1, 0.8, "Scene",       "RGB input",   FIXED_COLOR)
-    box(2.3,  1.5, 1.2, 0.8, "Optics",      "Identity PSF", SKIP_COLOR)
-    box(3.85, 1.5, 1.2, 0.8, "T×T Spectral","CFA Mosaic",  LEARNED_COLOR)
-    box(5.4,  1.5, 1.2, 0.8, "Noise + ADC", "Poisson-Gauss", LEARNED_COLOR)
-    box(6.95, 1.5, 1.2, 0.8, "Demosaick",   "Soft, diff'able", FIXED_COLOR)
-    box(8.7,  1.5, 1.5, 0.8, "SegFormer-B4","Task backbone", BACKBONE_COLOR)
+    # ── Boxes ─────────────────────────────────────────────────────────────────
+    box(0.7,  1.4, 1.1, 0.9, "Scene",        "RGB input",      "#F5F5F5")
+    box(2.3,  1.4, 1.2, 0.9, "Optics",       "Identity PSF",   SKIP_COLOR)
+    box(3.88, 1.4, 1.2, 0.9, "T×T Spectral", "CFA Mosaic",     LEARNED_COLOR)
+    box(5.46, 1.4, 1.2, 0.9, "Noise + ADC",  "Poisson-Gauss",  "#1565C0")
+    box(7.04, 1.4, 1.2, 0.9, "Demosaick",    "Soft, diff'able","#ECEFF1")
+    box(8.82, 1.4, 1.5, 0.9, "SegFormer-B4", "Task backbone",  BACKBONE_COLOR)
 
-    # Arrows
-    for x1, x2 in [(1.26, 1.66), (2.91, 3.21), (4.47, 4.77),
-                   (6.02, 6.32), (7.57, 7.87)]:
+    # ── Arrows ────────────────────────────────────────────────────────────────
+    for x1, x2 in [(1.26, 1.68), (2.91, 3.25), (4.49, 4.83),
+                   (6.07, 6.41), (7.65, 7.99)]:
         arrow(x1, x2)
+    ax.annotate("", xy=(9.90, 1.4), xytext=(9.59, 1.4),
+                arrowprops=dict(arrowstyle="-|>", color=ARROW_COLOR,
+                                lw=1.0, mutation_scale=9))
+    ax.text(9.96, 1.4, "Seg.\nMap", ha="left", va="center", fontsize=7.5,
+            color="#333333")
 
-    # Output arrow + label
-    ax.annotate("", xy=(9.85, 1.5), xytext=(9.48, 1.5),
-                arrowprops=dict(arrowstyle="-|>", color=ARROW_COLOR, lw=1.2, mutation_scale=10))
-    ax.text(9.92, 1.5, "Seg.\nMap", ha="left", va="center", fontsize=7.5)
+    # ── Chips (status badges) ─────────────────────────────────────────────────
+    chip(2.30, 2.10, "Fixed (Identity)",  "#FFCDD2", "#EF9A9A")
+    chip(3.88, 2.10, "Learned",           LEARNED_COLOR, CB["dkblue"])
+    chip(5.46, 2.10, "Learned",           "#1565C0", "#0D47A1")
+    chip(7.04, 2.10, "Fixed",             "#ECEFF1", "#AAAAAA")
+    chip(8.82, 2.10, "Pre-trained",       BACKBONE_COLOR, "#A5D6A7")
 
-    # Badges
-    badge(2.3,  2.04, "Fixed (Identity)", SKIP_COLOR[:-2] + "88")
-    badge(3.85, 2.04, "Learned",          "#E69138")
-    badge(5.4,  2.04, "Learned",          "#E69138")
-
-    # Annotation: learnable parameter count
+    # ── Parameter annotation ──────────────────────────────────────────────────
     ax.annotate(
-        r"$\mathbf{W} \in \mathbb{R}^{T^2 \times 3}$" + "\n(T=2,3,4)",
-        xy=(3.85, 0.92), xytext=(3.85, 0.30),
-        ha="center", fontsize=7, color="#333333",
-        arrowprops=dict(arrowstyle="-", color="#999999", lw=0.8),
+        r"$\mathbf{W} \in \mathbb{R}^{T^2 \times 3}$" + "  (T=2,3,4)",
+        xy=(3.88, 0.88), xytext=(3.88, 0.38),
+        ha="center", fontsize=7.5, color="#333333",
+        arrowprops=dict(arrowstyle="-", color="#AAAAAA", lw=0.7),
     )
 
-    # Legend
+    # ── Legend ────────────────────────────────────────────────────────────────
     legend_patches = [
-        mpatches.Patch(facecolor=FIXED_COLOR,    edgecolor="#666", label="Fixed"),
-        mpatches.Patch(facecolor=LEARNED_COLOR,  edgecolor="#666", label="Learned"),
-        mpatches.Patch(facecolor=SKIP_COLOR,     edgecolor="#666", label="Identity (bypassed)"),
-        mpatches.Patch(facecolor=BACKBONE_COLOR, edgecolor="#666", label="Pre-trained backbone"),
+        mpatches.Patch(facecolor=FIXED_COLOR,    edgecolor="#AAAAAA", label="Fixed"),
+        mpatches.Patch(facecolor=LEARNED_COLOR,  edgecolor="#888888", label="Learned (ours)"),
+        mpatches.Patch(facecolor=SKIP_COLOR,     edgecolor="#AAAAAA", label="Identity (bypassed)"),
+        mpatches.Patch(facecolor=BACKBONE_COLOR, edgecolor="#AAAAAA", label="Pre-trained backbone"),
     ]
-    ax.legend(handles=legend_patches, loc="upper right", frameon=True,
-              framealpha=0.9, fontsize=6.5, ncol=2,
-              bbox_to_anchor=(0.99, 0.98), borderpad=0.5)
+    leg = ax.legend(handles=legend_patches, loc="upper right", frameon=True,
+                    framealpha=0.95, fontsize=7, ncol=2,
+                    bbox_to_anchor=(1.0, 0.98), borderpad=0.5,
+                    edgecolor="#DDDDDD")
+    leg.get_frame().set_linewidth(0.5)
 
     fig.suptitle("Task-Optimal Spectral Mosaic Co-Design Pipeline",
-                 fontsize=9.5, fontweight="bold", y=1.01)
+                 fontsize=10, fontweight="bold", y=1.02)
     if save:
         out = os.path.join(OUT_DIR, "fig1_pipeline.pdf")
         fig.savefig(out)
@@ -470,77 +547,107 @@ def _safe_label(s: str) -> str:
 
 
 def plot_results(results: dict | None = None, save: bool = True) -> plt.Figure:
-    """Grouped bar chart of mIoU results across all experiments and datasets."""
+    """Main results bar chart — CVPR 2024 style.
+
+    Layout:
+      • Two side-by-side panels (KITTI-360 | ACDC), each ~3.3 in wide.
+      • Y-axis starts just below the fixed-camera baseline — emphasises relative gain.
+      • Dashed horizontal line at fixed-camera level; brace annotation showing our gain.
+      • Method bars use consistent semantic colour scheme.
+      • No top/right spines; light horizontal gridlines behind bars.
+    """
     if results is None:
         results = RESULTS
 
-    datasets = list(results.keys())
+    datasets  = list(results.keys())
     exp_names = list(results[datasets[0]].keys())
-    n_exps = len(exp_names)
-    n_ds   = len(datasets)
+    n_ds      = len(datasets)
 
-    fig, axes = plt.subplots(1, n_ds, figsize=(4.8 * n_ds, 3.8), sharey=False)
+    # ── Figure canvas ─────────────────────────────────────────────────────────
+    fig, axes = plt.subplots(1, n_ds, figsize=(3.5 * n_ds, 3.2), sharey=False)
     if n_ds == 1:
         axes = [axes]
 
     for ax, dataset in zip(axes, datasets):
-        data  = results[dataset]
-        vals  = [data[e] for e in exp_names]
+        data = results[dataset]
+        vals = [data[e] for e in exp_names]
 
-        # y-axis range: start just below fixed camera to show relative differences clearly
-        y_min_val = min(v for v in vals if v is not None)
-        y_max_val = max(v for v in vals if v is not None)
-        y_margin = (y_max_val - y_min_val) * 0.25
-        y_lo = max(0, y_min_val - y_margin * 0.5)
-        y_hi = y_max_val + y_margin * 1.8  # headroom for labels
+        avail = [v for v in vals if v is not None]
+        if not avail:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center",
+                    transform=ax.transAxes)
+            continue
 
-        x = np.arange(n_exps)
-        for i, (name, val) in enumerate(zip(exp_names, vals)):
-            color = EXP_COLORS.get(name, "#CCCCCC")
-            alpha = 1.0 if val is not None else 0.35
-            height = val if val is not None else y_lo + 0.001
-            ax.bar(i, height, 0.65, color=color, alpha=alpha, bottom=0,
-                   edgecolor="white", linewidth=0.8, zorder=3)
-            if val is not None:
-                # Horizontal label above bar, easier to read than rotated
-                ax.text(i, val + (y_max_val - y_min_val) * 0.02,
-                        f"{val:.4f}", ha="center", va="bottom",
-                        fontsize=6.5, color="#222222", fontweight="bold")
-            else:
-                ax.text(i, y_lo + y_margin * 0.1, "—", ha="center", va="bottom",
-                        fontsize=8, color="#AAAAAA")
+        y_max = max(avail)
+        y_min = min(avail)
+        span  = y_max - y_min
+        # Tight y-range: show differences clearly, not absolute scale
+        y_lo  = max(0, y_min - span * 0.35)
+        y_hi  = y_max + span * 1.55   # headroom for labels and annotation
 
-        # Fixed camera reference line
         fixed_val = data.get("Fixed camera")
+        best_val  = data.get("No optics ★")
+
+        # ── Bars ──────────────────────────────────────────────────────────────
+        for i, (name, val) in enumerate(zip(exp_names, vals)):
+            color  = EXP_COLORS.get(name, CB["gray"])
+            height = val if val is not None else y_lo
+            alpha  = 1.0 if val is not None else 0.3
+
+            ax.bar(i, height, 0.62, color=color, alpha=alpha,
+                   edgecolor="white", linewidth=0.5, zorder=3,
+                   bottom=0)
+
+            if val is not None:
+                # Value label — compact, above bar
+                ax.text(i, val + span * 0.03,
+                        f"{val:.4f}", ha="center", va="bottom",
+                        fontsize=6.5, fontweight="600", color="#333333")
+            else:
+                ax.text(i, y_lo + span * 0.05, "—",
+                        ha="center", va="bottom", fontsize=8, color="#BBBBBB")
+
+        # ── Fixed-camera dashed reference line ────────────────────────────────
         if fixed_val is not None:
-            ax.axhline(fixed_val, color="#607D8B", linewidth=1.0,
-                       linestyle="--", alpha=0.6, zorder=2,
-                       label=f"Fixed camera ({fixed_val:.4f})")
+            ax.axhline(fixed_val, color=CB["gray"], linewidth=1.0,
+                       linestyle=(0, (4, 2)), alpha=0.8, zorder=2)
+            ax.text(-0.45, fixed_val + span * 0.015,
+                    "fixed camera", fontsize=6.5, color=CB["gray"],
+                    va="bottom", style="italic")
 
-        ax.set_title(dataset, fontsize=10, fontweight="bold", pad=6)
-        ax.set_xticks(x)
-        ax.set_xticklabels([_safe_label(n) for n in exp_names],
-                           rotation=30, ha="right", fontsize=7.5)
-        ax.set_ylabel("mIoU", fontsize=8.5)
-        ax.set_ylim(y_lo, y_hi)
-        ax.grid(axis="y", alpha=0.25, linewidth=0.5, zorder=0)
-
-        # Annotate best sensor config
-        best_idx = next((i for i, n in enumerate(exp_names) if "★" in n), None)
-        if best_idx is not None and vals[best_idx] is not None:
+        # ── Gain bracket — fixed → best ───────────────────────────────────────
+        fixed_idx = exp_names.index("Fixed camera") if "Fixed camera" in exp_names else None
+        best_idx  = next((i for i, n in enumerate(exp_names) if "★" in n), None)
+        if (fixed_idx is not None and best_idx is not None
+                and fixed_val is not None and best_val is not None):
+            bx = best_idx
+            gain = best_val - fixed_val
+            brace_y = best_val + span * 0.22
             ax.annotate(
-                "Best sensor", xy=(best_idx, vals[best_idx]),
-                xytext=(best_idx + 1.1, vals[best_idx] + (y_max_val - y_min_val) * 0.06),
-                fontsize=7, color=EXP_COLORS.get("No optics ★", "#1565C0"),
-                fontweight="bold",
-                arrowprops=dict(arrowstyle="->",
-                                color=EXP_COLORS.get("No optics ★", "#1565C0"),
-                                lw=0.9),
+                "", xy=(bx, best_val + span * 0.02),
+                xytext=(bx, brace_y - span * 0.02),
+                arrowprops=dict(arrowstyle="-|>", lw=0.8,
+                                color=CB["dkblue"], mutation_scale=7),
             )
+            ax.text(bx + 0.3, (best_val + brace_y) / 2,
+                    f"+{gain:.3f}", fontsize=7, color=CB["dkblue"],
+                    fontweight="bold", va="center")
 
-    fig.suptitle("mIoU Comparison — Task-Optimal Spectral CFA Design",
+        # ── Axis styling ──────────────────────────────────────────────────────
+        ax.set_title(dataset, fontsize=10, fontweight="bold", pad=5)
+        ax.set_xticks(range(len(exp_names)))
+        short_labels = [EXP_SHORT.get(n, _safe_label(n)) for n in exp_names]
+        ax.set_xticklabels(short_labels, fontsize=7.5,
+                           ha="center", multialignment="center")
+        ax.set_ylabel("mIoU" if dataset == datasets[0] else "", fontsize=9)
+        ax.set_ylim(y_lo, y_hi)
+        ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7, zorder=0)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="x", which="both", length=0)  # no x-ticks, labels only
+
+    fig.suptitle("Segmentation mIoU — Task-Optimal Spectral CFA Design",
                  fontsize=10, fontweight="bold", y=1.01)
-    fig.tight_layout()
+    fig.tight_layout(pad=0.8, w_pad=0.6)
 
     if save:
         out = os.path.join(OUT_DIR, "fig5_results.pdf")
@@ -564,32 +671,34 @@ def plot_tile_trend(
     if acdc_miou is None:
         acdc_miou  = {2: 0.6853, 3: 0.6800, 4: 0.6740}
 
-    fig, ax = plt.subplots(figsize=(3.2, 2.4))
+    fig, ax = plt.subplots(figsize=(3.4, 2.8))
     sizes = [2, 3, 4]
 
     for label, data, color, marker in [
-        ("KITTI-360", kitti_miou, "#1565C0", "o"),
-        ("ACDC",      acdc_miou,  "#E65100", "s"),
+        ("KITTI-360", kitti_miou, CB["dkblue"], "o"),
+        ("ACDC",      acdc_miou,  CB["red"],    "s"),
     ]:
         ys  = [data.get(s) for s in sizes]
         xs_ = [s for s, y in zip(sizes, ys) if y is not None]
         ys_ = [y for y in ys if y is not None]
         if xs_:
-            ax.plot(xs_, ys_, color=color, marker=marker, linewidth=1.8,
-                    markersize=6, label=label, zorder=3)
-        # pending points as dotted
+            ax.plot(xs_, ys_, color=color, marker=marker, linewidth=2.0,
+                    markersize=7, label=label, zorder=3,
+                    markeredgecolor="white", markeredgewidth=0.8)
         for s, y in zip(sizes, ys):
-            if y is None:
-                ax.plot(s, 0, marker=marker, color=color, alpha=0.3,
-                        markersize=5, zorder=2)
+            if y is not None:
+                ax.text(s, y + 0.0015, f"{y:.4f}", ha="center", va="bottom",
+                        fontsize=6.5, color=color)
 
-    ax.set_xlabel("CFA tile size T  (filters = T²)", fontsize=8)
-    ax.set_ylabel("mIoU", fontsize=8)
+    ax.set_xlabel("CFA tile size T  (T² filters)", fontsize=9)
+    ax.set_ylabel("mIoU", fontsize=9)
     ax.set_xticks(sizes)
-    ax.set_xticklabels(["2×2\n(4 filters)", "3×3\n(9 filters)", "4×4\n(16 filters)"])
-    ax.legend(frameon=False, fontsize=7)
-    ax.grid(axis="y", alpha=0.3, linewidth=0.5)
-    ax.set_title("mIoU vs CFA Tile Size", fontsize=9, fontweight="bold")
+    ax.set_xticklabels(["2×2\n(4)", "3×3\n(9)", "4×4\n(16)"], fontsize=8)
+    ax.legend(frameon=True, framealpha=0.9, fontsize=8,
+              edgecolor="#DDDDDD", loc="upper right")
+    ax.yaxis.grid(True, color="#E0E0E0", linewidth=0.7, zorder=0)
+    ax.set_axisbelow(True)
+    ax.set_title("mIoU vs CFA Tile Size", fontsize=10, fontweight="bold", pad=5)
     fig.tight_layout()
 
     if save:
@@ -723,133 +832,136 @@ def auto_collect_results(
 # ── Figure 7: Ablation Decomposition ──────────────────────────────────────────
 
 def plot_ablation_decomposition(results: dict | None = None, save: bool = True) -> plt.Figure:
-    """Sensor dimension contribution chart.
+    """Sensor-dimension contribution — horizontal Cleveland dot (lollipop) chart.
 
-    Grouped bar chart with 3 component groups on the x-axis:
-      CFA learning | Noise optimisation | PSF optimisation
-    Each group has one bar per dataset (KITTI=blue, ACDC=orange).
-    Bars extend above/below zero to show positive/negative contributions.
-
-    Note: ACDC PSF bar uses old-physics co-design vs new-physics no_optics —
-    the comparison is indicative only (shown with hatching).
+    Modern CVPR style: each row is one (dataset, component) combination.
+    A dot marks the ΔmIoU; a line connects it to the zero axis.
+    Colour encodes direction: positive = teal/green, negative = orange-red.
+    ACDC PSF effect is marked '†' (cross-physics comparison, indicative only).
     """
     if results is None:
         results = RESULTS
 
-    DS_COLORS = {"KITTI-360": "#1565C0", "ACDC": "#E65100"}
-
-    # Compute deltas for each dataset
-    components: dict[str, dict] = {}
-    for ds, data in results.items():
+    # ── Compute deltas ────────────────────────────────────────────────────────
+    rows   = []   # (dataset, component, delta, cross_physics)
+    for ds in ["KITTI-360", "ACDC"]:
+        data = results.get(ds, {})
         fixed    = data.get("Fixed camera")
         cfa_o    = data.get("CFA only")
         no_opt   = data.get("No optics ★")
         codesign = data.get("Co-design (PSF+CFA)")
-        rgb_val  = data.get("RGB")
 
         if fixed is None:
             continue
+        cfa_gain  = (cfa_o  - fixed)    if cfa_o  is not None else None
+        noise_eff = (no_opt - cfa_o)    if (no_opt is not None and cfa_o is not None) else None
+        psf_eff   = (codesign - no_opt) if (codesign is not None and no_opt is not None) else None
 
-        cfa_gain   = (cfa_o  - fixed)    if cfa_o  is not None else None
-        noise_eff  = (no_opt - cfa_o)    if (no_opt is not None and cfa_o is not None) else None
-        # PSF effect: codesign - no_optics  (negative = PSF hurts)
-        # For ACDC this is cross-physics (old co-design vs new no_optics) — flag it
-        psf_eff    = (codesign - no_opt) if (codesign is not None and no_opt is not None) else None
-        oracle     = (rgb_val  - fixed)  if rgb_val  is not None else None
+        rows.append((ds, "CFA learning",       cfa_gain,  False))
+        rows.append((ds, "Noise optimisation", noise_eff, False))
+        rows.append((ds, "PSF optimisation",   psf_eff,   ds == "ACDC"))
 
-        components[ds] = {
-            "CFA learning":        cfa_gain,
-            "Noise optimisation":  noise_eff,
-            "PSF optimisation":    psf_eff,
-            "oracle":              oracle,
-        }
+    # Build y-positions — group by component with a small gap between datasets
+    COMP_ORDER = ["CFA learning", "Noise optimisation", "PSF optimisation"]
+    DS_ORDER   = ["KITTI-360", "ACDC"]
+    DS_MARKERS = {"KITTI-360": "o", "ACDC": "s"}
+    DS_COLORS  = {"KITTI-360": CB["dkblue"], "ACDC": CB["red"]}
 
-    comp_keys = ["CFA learning", "Noise optimisation", "PSF optimisation"]
-    ds_keys   = [ds for ds in ["KITTI-360", "ACDC"] if ds in components]
-    n_groups  = len(comp_keys)
-    n_ds      = len(ds_keys)
+    y_labels = []
+    y_ticks  = []
+    y_pos    = {}
+    cur_y    = 0
+    for comp in COMP_ORDER:
+        for ds in DS_ORDER:
+            y_pos[(ds, comp)] = cur_y
+            y_labels.append(f"  {ds}")
+            y_ticks.append(cur_y)
+            cur_y -= 1
+        cur_y -= 0.5   # extra gap between component groups
 
-    fig, ax = plt.subplots(figsize=(5.8, 3.4))
+    # ── Figure ────────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(5.5, 3.6))
 
-    x      = np.arange(n_groups)
-    w      = 0.32
-    # Centre bars symmetrically around group tick
-    offsets = np.linspace(-(n_ds - 1) / 2, (n_ds - 1) / 2, n_ds) * w
+    all_vals = [r[2] for r in rows if r[2] is not None]
+    x_pad    = max(abs(v) for v in all_vals) * 0.35 if all_vals else 0.01
+    x_lo     = min(0, min(all_vals)) - x_pad
+    x_hi     = max(0, max(all_vals)) + x_pad
 
-    all_vals = []
-    for ds, offset in zip(ds_keys, offsets):
-        comp_data = components[ds]
-        color = DS_COLORS[ds]
+    for ds, comp, val, cross in rows:
+        if val is None:
+            continue
+        yp    = y_pos[(ds, comp)]
+        color = CB["green"] if val >= 0 else CB["red"]
+        alpha = 0.5 if cross else 0.92
 
-        for gi, ckey in enumerate(comp_keys):
-            val = comp_data.get(ckey)
-            if val is None:
-                continue
+        # Lollipop stem
+        ax.plot([0, val], [yp, yp], color=color, lw=1.8 if not cross else 1.2,
+                alpha=alpha, solid_capstyle="round", zorder=3,
+                linestyle="--" if cross else "-")
+        # Dot
+        ax.scatter(val, yp, color=color, s=60, zorder=5, alpha=alpha,
+                   marker=DS_MARKERS[ds],
+                   edgecolors="white", linewidths=0.7)
 
-            # ACDC PSF bar is cross-physics — show with hatching
-            cross_physics = (ds == "ACDC" and ckey == "PSF optimisation")
-            hatch = "////" if cross_physics else None
-            edge_color = "#AAAAAA" if cross_physics else "white"
+        # Value label
+        sign = "+" if val >= 0 else ""
+        label_x = val + (x_hi - x_lo) * 0.025 * np.sign(val if val != 0 else 1)
+        ha = "left" if val >= 0 else "right"
+        suffix = "†" if cross else ""
+        ax.text(label_x, yp, f"{sign}{val:.3f}{suffix}",
+                ha=ha, va="center", fontsize=7.5,
+                color=color, fontweight="600")
 
-            pos = x[gi] + offset
-            bar_alpha = 0.5 if cross_physics else 0.9
-            ax.bar(pos, val, w * 0.95,
-                   color=color, alpha=bar_alpha, hatch=hatch,
-                   edgecolor=edge_color, linewidth=0.8, zorder=3)
+    # Component section labels (right side)
+    comp_y_centres = {}
+    for comp in COMP_ORDER:
+        ys = [y_pos[(ds, comp)] for ds in DS_ORDER if (ds, comp) in y_pos]
+        comp_y_centres[comp] = np.mean(ys)
 
-            # Value label
-            sign = "+" if val >= 0 else ""
-            label_y = val + 0.0006 if val >= 0 else val - 0.0006
-            va = "bottom" if val >= 0 else "top"
-            ax.text(pos, label_y, f"{sign}{val:.3f}",
-                    ha="center", va=va, fontsize=7, fontweight="bold",
-                    color=color)
-            all_vals.append(val)
+    for comp, cy in comp_y_centres.items():
+        ax.text(x_hi + (x_hi - x_lo) * 0.35, cy, comp,
+                ha="left", va="center", fontsize=8.5,
+                fontweight="bold", color="#333333")
+        # Horizontal divider between component groups
+        ax.axhspan(cy - 1.3, cy + 1.3, alpha=0.03, color="#E0E0E0", zorder=0)
 
-    # Zero reference line
-    ax.axhline(0, color="#555555", linewidth=0.9, zorder=1)
+    # Zero spine
+    ax.axvline(0, color="#555555", lw=0.9, zorder=2)
 
-    # x-axis
-    ax.set_xticks(x)
-    ax.set_xticklabels(comp_keys, fontsize=9)
-    ax.set_ylabel(r"$\Delta$mIoU  (vs Fixed-Camera baseline)", fontsize=8.5)
+    # ── Helps / Hurts shading ─────────────────────────────────────────────────
+    ax.axvspan(0, x_hi, alpha=0.04, color="#029E73", zorder=0)
+    ax.axvspan(x_lo, 0, alpha=0.05, color="#D55E00", zorder=0)
+    ax.text(x_hi * 0.97, max(y_ticks) + 0.3, "benefits (+)",
+            ha="right", va="bottom", fontsize=7, color="#029E73", style="italic")
+    ax.text(x_lo * 0.97, max(y_ticks) + 0.3, "hurts (-)",
+            ha="left", va="bottom", fontsize=7, color="#D55E00", style="italic")
 
-    # y-axis: symmetric range with enough headroom for labels
-    if all_vals:
-        pad = max(abs(v) for v in all_vals) * 0.55
-        ax.set_ylim(min(0, min(all_vals)) - pad * 0.4,
-                    max(0, max(all_vals)) + pad)
+    # ── Axes ──────────────────────────────────────────────────────────────────
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels(y_labels, fontsize=8)
+    ax.set_xlim(x_lo, x_hi * 1.65)   # extra right margin for comp labels
+    ax.set_ylim(min(y_ticks) - 0.7, max(y_ticks) + 0.8)
+    ax.set_xlabel(r"$\Delta$mIoU  (vs Fixed-Camera baseline)", fontsize=9)
+    ax.xaxis.grid(True, color="#E0E0E0", linewidth=0.7, zorder=0)
+    ax.yaxis.grid(False)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
 
-    ax.grid(axis="y", alpha=0.25, linewidth=0.5, zorder=0)
-
-    # Shaded region: "helps" vs "hurts"
-    ymin, ymax = ax.get_ylim()
-    ax.axhspan(0, ymax, alpha=0.04, color="#4CAF50", zorder=0)
-    ax.axhspan(ymin, 0, alpha=0.04, color="#F44336", zorder=0)
-    ax.text(n_groups - 0.05, ymax * 0.92, "helps ▲",
-            ha="right", va="top", fontsize=7, color="#388E3C", style="italic")
-    ax.text(n_groups - 0.05, ymin * 0.92, "hurts ▼",
-            ha="right", va="bottom", fontsize=7, color="#C62828", style="italic")
-
-    # Legend
-    ds_handles = [
-        mpatches.Patch(facecolor=DS_COLORS[ds], label=ds) for ds in ds_keys
+    # Dataset legend
+    legend_handles = [
+        mpatches.Patch(color=DS_COLORS[ds],
+                       label=ds + (" (†cross-physics PSF)" if ds == "ACDC" else ""))
+        for ds in DS_ORDER
     ]
-    if any(ds == "ACDC" for ds in ds_keys):
-        ds_handles.append(mpatches.Patch(
-            facecolor=DS_COLORS.get("ACDC", "#E65100"), hatch="////",
-            edgecolor="#AAAAAA", alpha=0.5,
-            label="ACDC PSF (cross-physics†)"))
-    ax.legend(handles=ds_handles, fontsize=7.5, frameon=True,
-              framealpha=0.9, loc="upper right", ncol=1)
+    ax.legend(handles=legend_handles, fontsize=7.5, frameon=True,
+              framealpha=0.9, loc="lower right", ncol=1, edgecolor="#DDDDDD")
 
-    ax.set_title("Sensor Dimension Contribution to mIoU",
+    ax.set_title("Sensor Dimension Contribution to Segmentation mIoU",
                  fontsize=10, fontweight="bold", pad=6)
 
-    # Footnote for cross-physics note
-    fig.text(0.5, -0.04,
-             "† ACDC PSF bar compares old-physics co-design to new-physics no-optics; directional only.",
-             ha="center", fontsize=6.5, style="italic", color="#666666")
+    fig.text(0.5, -0.03,
+             "† ACDC PSF uses old-physics co-design vs new-physics no-optics (directional).",
+             ha="center", fontsize=6.5, style="italic", color="#777777")
 
     fig.tight_layout()
 

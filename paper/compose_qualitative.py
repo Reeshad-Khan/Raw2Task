@@ -29,15 +29,17 @@ import matplotlib as mpl
 import numpy as np
 from PIL import Image
 
-# ── Publication style ─────────────────────────────────────────────────────────
+# ── Publication style (matches make_figures.py) ───────────────────────────────
 mpl.rcParams.update({
-    "font.family":        "serif",
-    "font.serif":         ["Times New Roman", "Times", "DejaVu Serif"],
+    "font.family":        "sans-serif",
+    "font.sans-serif":    ["Arial", "Helvetica", "DejaVu Sans"],
+    "pdf.fonttype":       42,
+    "ps.fonttype":        42,
     "font.size":          8,
     "axes.titlesize":     8,
     "savefig.dpi":        300,
     "savefig.bbox":       "tight",
-    "savefig.pad_inches": 0.04,
+    "savefig.pad_inches": 0.03,
 })
 
 FIGURES_DIR = os.path.join(os.path.dirname(__file__), "figures")
@@ -161,47 +163,52 @@ def compose_figure(
     ph, pw = all_rows[0][0].shape[:2]
     aspect = ph / pw  # height / width
 
-    # Figure sizing — target ~6.5 inches wide (double-column CVPR width)
-    fig_w = 6.5
-    panel_w_in = fig_w / n_cols
-    panel_h_in = panel_w_in * aspect
-    header_h   = 0.28   # column header row height (inches)
-    row_label_w = 0.0   # no row labels — keep it clean
+    # Figure sizing — 6.5 in wide (double-column CVPR width)
+    fig_w       = 6.5
+    panel_w_in  = fig_w / n_cols
+    panel_h_in  = panel_w_in * aspect
+    header_h_in = 0.20   # compact bold header strip
 
-    fig_h = n_rows * panel_h_in + header_h + 0.05
-    fig = plt.figure(figsize=(fig_w, fig_h))
+    fig_h = panel_h_in * n_rows + header_h_in + 0.02
+    fig   = plt.figure(figsize=(fig_w, fig_h), facecolor="white")
 
     gs = gridspec.GridSpec(
         n_rows + 1, n_cols,
         figure=fig,
-        height_ratios=[header_h / panel_h_in] + [1.0] * n_rows,
-        hspace=0.025,
-        wspace=0.012,
+        height_ratios=[header_h_in / panel_h_in] + [1.0] * n_rows,
+        hspace=0.008,   # near-zero gap — tight grid
+        wspace=0.006,
     )
 
-    # Column header row
-    for j, label in enumerate(col_labels):
+    # Column header row — no background, just bold text
+    for j, (_, lbl) in enumerate(col_specs):
         ax = fig.add_subplot(gs[0, j])
-        ax.text(0.5, 0.4, label,
-                ha="center", va="center",
-                fontsize=8.5, fontweight="bold",
-                transform=ax.transAxes)
+        ax.text(0.5, 0.15, lbl,
+                ha="center", va="bottom",
+                fontsize=9, fontweight="bold",
+                transform=ax.transAxes, color="#111111")
         ax.axis("off")
 
-    # Image rows
+    # Image rows — no borders, pure image grid
     for i, panels in enumerate(all_rows):
         for j, panel_img in enumerate(panels):
             ax = fig.add_subplot(gs[i + 1, j])
             ax.imshow(panel_img, interpolation="bilinear", aspect="auto")
             ax.axis("off")
-            # Left edge: scene label (rank)
+            # Thin white border to separate panels visually
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_color("white")
+                spine.set_linewidth(0.8)
+            # Left-side (i+1) scene index
             if j == 0:
-                ax.set_ylabel(f"Scene {i+1}", fontsize=7, labelpad=3, rotation=90,
-                              va="center")
-                ax.yaxis.label.set_visible(True)
+                ax.text(-0.03, 0.5, f"({i+1})",
+                        ha="right", va="center", fontsize=8,
+                        fontweight="bold", color="#555555",
+                        transform=ax.transAxes)
 
-    fig.suptitle(f"{dataset_label} — Qualitative Segmentation Comparison",
-                 fontsize=9.5, fontweight="bold", y=1.005)
+    fig.suptitle(f"{dataset_label}  —  Qualitative Segmentation Comparison",
+                 fontsize=9.5, fontweight="bold", y=1.002, color="#111111")
 
     out_pdf = os.path.join(FIGURES_DIR, f"{out_stem}.pdf")
     out_png = os.path.join(FIGURES_DIR, f"{out_stem}.png")
