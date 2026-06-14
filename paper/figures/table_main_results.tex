@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Sensor co-design results on KITTI-360 and ACDC (SegFormer-B4). Best \emph{sensor} configuration highlighted in bold.}
+\label{tab:main_results}
+\small
+\begin{tabular}{lccccrrrr}
+\toprule
+Method & PSF & CFA & Noise & Tile & \multicolumn{2}{c}{KITTI-360} & \multicolumn{2}{c}{ACDC} \\
+\cmidrule(lr){6-7}\cmidrule(lr){8-9}
+& & & & & mIoU & PixAcc & mIoU & PixAcc \\
+\midrule
+\midrule
+RGB (no sensor pipeline) & \textemdash & \textemdash & \textemdash & \textemdash & \textbf{0.6396} & \textemdash & \textbf{0.7374} & \textemdash \\
+Fixed camera & $\times$ & $\times$ & $\times$ & 2 & 0.6043 & \textemdash & 0.6654 & \textemdash \\
+Co-design (PSF+CFA+noise) & \checkmark & \checkmark & \checkmark & 2 & 0.6031 & \textemdash & 0.6906 & \textemdash \\
+No optics \textbf{(Ours$^\star$)} & $\times$ & \checkmark & \checkmark & 2 & 0.6229 & \textemdash & 0.6853 & \textemdash \\
+CFA only (no noise co-opt.) & $\times$ & \checkmark & $\times$ & 2 & 0.6214 & \textemdash & 0.6882 & \textemdash \\
+Tile-3 ablation & $\times$ & \checkmark & \checkmark & 3 & 0.6165 & \textemdash & 0.6800 & \textemdash \\
+Tile-4 ablation & $\times$ & \checkmark & \checkmark & 4 & 0.6133 & \textemdash & 0.6740 & \textemdash \\
+\midrule
+\multicolumn{9}{l}{\scriptsize $\star$ Best sensor configuration (new physics). PSF: \checkmark=learnable, $\times$=identity PSF. CFA: \checkmark=learnable spectral weights, $\times$=fixed Bayer.}
+\bottomrule
+\end{tabular}
+\end{table}
