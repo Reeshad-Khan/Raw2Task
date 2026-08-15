@@ -1,0 +1,24 @@
+# Seed-variance check for cfa_only_sfb4 (the exact fixed-camera-vs-CFA-only
+# isolation Reviewer RKV7/dMx8 asked about), for the WACV resubmission.
+# Same base_config/out_root as kitti360_sfb4_spectral_matrix.yaml so results
+# land alongside the existing seed0 run and merge into the same summary.csv.
+
+base_config: raw2task/configs/kitti360_sfb4_base.yaml
+out_root: ./runs/kitti360_sfb4_spectral
+seeds: [1]
+
+experiments:
+  - name: cfa_only_sfb4
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""
+      sensor:
+        learn_noise: false
+        learn_bit_depth: false
+      train:
+        backbone_freeze_epochs: 0
+        alternating_opt_enabled: false
+        psf_proximity_weight: 0.0

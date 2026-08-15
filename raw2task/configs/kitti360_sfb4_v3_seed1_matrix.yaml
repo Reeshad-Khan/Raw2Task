@@ -1,0 +1,32 @@
+# Seed-variance check for WACV resubmission (paper's headline KITTI-360
+# comparisons, single additional seed to keep each SLURM job comfortably
+# under the 24h time limit — see kitti360_sfb4_v3_seed2_matrix.yaml for the
+# other new seed). Same base_config/out_root as kitti360_sfb4_v3_matrix.yaml
+# so results land alongside the existing seed0 runs and merge into the same
+# summary.csv.
+
+base_config: raw2task/configs/kitti360_sfb4_base.yaml
+out_root: ./runs/kitti360_sfb4_v3
+seeds: [1]
+
+experiments:
+  - name: codesign_sfb4
+    overrides: {}
+
+  - name: ablate_fixed_camera_sfb4
+    overrides:
+      sensor:
+        learn_cfa: false
+        learn_exposure: false
+        learn_noise: false
+        learn_bit_depth: false
+      lens:
+        learn_optics: false
+
+  - name: ablate_no_optics_sfb4
+    overrides:
+      debug:
+        bypass_optics: true
+      lens:
+        mode: identity
+        path: ""

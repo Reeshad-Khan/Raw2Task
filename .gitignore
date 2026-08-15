@@ -6,6 +6,7 @@ deeplens.egg-info/
 *.png
 *.sh
 !submit_experiments.sh
+!submit_wacv_experiments.sh
 results/
 deeplens/do_code/
 !lenses/*.png
